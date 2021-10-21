@@ -1,4 +1,4 @@
-use std::time::{Duration, SystemTime, SystemTimeError};
+use std::time::{Duration, Instant};
 
 
 /// Helmets protect against snipers.
@@ -27,13 +27,13 @@ pub struct Auction {
     max_raise: Money,
     min_bid: Money,
 
-    time_begin: SystemTime,
-    time_close: SystemTime,
+    time_begin: Instant,
+    time_close: Instant,
 }
 
 impl Auction {
     pub fn new(duration: Duration, max_raise: Money, min_bid: Money) -> Self {
-        let now = SystemTime::now();
+        let now = Instant::now();
 
         Self {
             current_bid: None,
@@ -79,11 +79,10 @@ impl Auction {
     }
 
     fn deflect_sniper(&mut self) {
-        let now = SystemTime::now();
+        let now = Instant::now();
 
-        match self.time_close.duration_since(now) {
-            Ok(dur) if dur > HELMET => {} // NOP
-            _ => { self.time_close = now + HELMET; }
+        if (self.time_close - HELMET) < now {
+            self.time_close = now + HELMET;
         }
     }
 
@@ -92,6 +91,6 @@ impl Auction {
     }
 
     pub fn remaining(&self) -> Option<Duration> {
-        self.time_close.duration_since(SystemTime::now()).ok()
+        self.time_close.checked_duration_since(Instant::now())
     }
 }

@@ -1,25 +1,24 @@
 mod auction;
 
 use auction::*;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 
 struct Timer {
-    next: SystemTime,
+    next: Instant,
 }
 
 impl Timer {
     const TICK: Duration = Duration::from_secs(1);
 
-    fn new() -> Self { Self { next: SystemTime::now() + Self::TICK } }
+    fn new() -> Self { Self { next: Instant::now() + Self::TICK } }
 
     fn tick(&mut self) -> bool {
-        match SystemTime::now().duration_since(self.next) {
-            Err(..) => false,
-            Ok(..) => {
-                self.next += Self::TICK;
-                true
-            }
+        if Instant::now() <= self.next {
+            self.next += Self::TICK;
+            true
+        } else {
+            false
         }
     }
 }
