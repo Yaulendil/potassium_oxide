@@ -5,3 +5,5 @@ edition = "2018"
 
 
 [dependencies]
+ctrlc = "3.2"
+parking_lot = "0.11"

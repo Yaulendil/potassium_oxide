@@ -7,8 +7,8 @@ type Money = usize;
 
 
 pub struct Bid {
-    bidder: String,
-    amount: Money,
+    pub amount: Money,
+    pub bidder: String,
 }
 
 
@@ -50,8 +50,8 @@ impl Auction {
         bid_new: Money,
     ) -> BidResult {
         if let Some(Bid {
-            bidder: ref name_current,
             amount: bid_current,
+            bidder: ref name_current,
         }) = self.current_bid {
             if name_new.as_ref() == name_current.as_str() {
                 return BidResult::RepeatBidder;
@@ -71,8 +71,8 @@ impl Auction {
         }
 
         self.current_bid.replace(Bid {
-            bidder: name_new.as_ref().to_string(),
             amount: bid_new,
+            bidder: name_new.as_ref().to_string(),
         });
         self.deflect_sniper();
         BidResult::Ok
@@ -82,9 +82,13 @@ impl Auction {
         let now = SystemTime::now();
 
         match self.time_close.duration_since(now) {
-            Ok(dur) if dur > HELMET => {}
+            Ok(dur) if dur > HELMET => {} // NOP
             _ => { self.time_close = now + HELMET; }
         }
+    }
+
+    pub fn get_bid(&self) -> Option<&Bid> {
+        self.current_bid.as_ref()
     }
 
     pub fn remaining(&self) -> Option<Duration> {
