@@ -1,0 +1,29 @@
+# Options for authentication with Twitch.
+[auth]
+username = "xXxAUCTIONZ_420xXx"
+client_key = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+oauth = "oauth:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+
+# Options for the operation of the bot itself.
+[bot]
+# By default, the Broadcaster and Moderators of a channel can control Auctions
+#   in their own channel. This option is a list of usernames that are allowed to
+#   control Auctions in ANY channel; Intended for cases where the maintainer of
+#   this instance is not a Moderator.
+admins = []
+
+# Commands invoked by any username in this list will not be processed.
+blacklist = []
+
+# Helmets protect against snipers. If someone attempts to input a bid when the
+#   remaining time (in seconds) is below the Helmet value, the Helmet value is
+#   added to the timer.
+helmet = 15
+
+# Prefix for commands. Any message that begins with this string will be taken as
+#   a command invocation.
+prefix = "+"
+
+# Maximum amount allowed for raising.
+raise_limit = 500

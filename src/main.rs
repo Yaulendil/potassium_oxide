@@ -1,42 +1,43 @@
-#[macro_use]
-mod macros;
-mod bot;
-
-use bot::Bot;
-use std::{
-    env::args,
-    thread::spawn,
-    sync::atomic::{AtomicBool, Ordering::SeqCst},
-};
+use potassium_oxide as k2o;
+use std::{env::args, process::exit, thread::spawn};
 
 
-static STOP: AtomicBool = AtomicBool::new(false);
-
-
-fn running() -> bool { !STOP.load(SeqCst) }
-fn stop() { STOP.store(true, SeqCst); }
-
-
-fn run_bot(channel: String) {
-    let mut bot = Bot::new(channel);
-    bot.run()
+macro_rules! die {
+    ($($msg:tt)*) => {|_err| {
+        k2o::fatal!($($msg)*);
+        std::process::exit(1);
+    }};
 }
 
 
 fn main() {
-    ctrlc::set_handler(stop).expect("Failed to set Interrupt Handler");
+    // ctrlc::set_handler(k2o::stop).expect("Failed to set Interrupt Handler");
+    ctrlc::set_handler(k2o::stop).unwrap_or_else(
+        die!("Failed to set Interrupt Handler.")
+    );
+    // let config = k2o::Config::setup().unwrap();
 
-    let channels = args().skip(1);
-    let mut threads = Vec::with_capacity(channels.len());
+    match k2o::Config::setup() {
+        Ok(config) => {
+            let channels = args().skip(1);
 
-    for channel in channels {
-        eprintln!("Joining {}...", channel);
-        threads.push(spawn(move || run_bot(channel)));
-    }
+            let mut threads = Vec::with_capacity(channels.len());
 
-    for thread in threads {
-        if let Err(err) = thread.join() {
-            eprintln!("{:?}", err);
+            for channel in channels {
+                eprintln!("Joining {}...", channel);
+                let cfg = config.clone();
+                threads.push(spawn(move || k2o::run_bot(channel, &cfg)));
+            }
+
+            for thread in threads {
+                if let Err(err) = thread.join() {
+                    eprintln!("{:?}", err);
+                }
+            }
+        }
+        Err(error) => {
+            eprintln!("{}", &error);
+            exit(error.status());
         }
     }
 }
