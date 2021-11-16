@@ -132,6 +132,7 @@ impl<'b> Bot<'b> {
             self.client = Some(client);
 
             let res = self.main_loop(runner).await;
+
             auction_loop.join().expect("Failed to rejoin Auction thread.");
             println!();
             res
@@ -141,13 +142,16 @@ impl<'b> Bot<'b> {
     }
 
     async fn main_loop(&mut self, mut runner: AsyncRunner) -> Result<BotExit, BotExit> {
-        loop {
+        let ret = loop {
             match runner.next_message().await.unwrap() {
                 Status::Message(msg) => self.handle_message(msg).await,
                 Status::Quit => break Ok(BotExit::BotExited),
                 Status::Eof => break Ok(BotExit::BotClosed),
             }
-        }
+        };
+
+        runner.part(&self.channel).await.unwrap();
+        ret
     }
 
     async fn handle_command(&mut self, msg: &messages::Privmsg<'_>, words: &[&str]) {

@@ -8,13 +8,19 @@ fn main() {
         exit(1);
     });
 
-    match Config::setup() {
-        Ok(config) => {
-            let channels = args().skip(1);
+    let mut config_path: Option<String> = None;
+    let channels: Vec<String> = args().skip(1).collect();
 
+    //  TODO: Command line flags.
+
+    match match config_path {
+        Some(path) => Config::from_path(path),
+        None => Config::setup(),
+    } {
+        Ok(config) => {
             let mut threads = Vec::with_capacity(channels.len());
 
-            for channel in channels {
+            for channel in channels.into_iter() {
                 info!("Joining #{}...", &channel);
                 let cfg = config.clone();
                 threads.push(spawn(move || run_bot(channel, &cfg)));
