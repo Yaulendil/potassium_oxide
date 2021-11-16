@@ -14,6 +14,7 @@ macro_rules! filename {($name:expr) => {concat!($name, ".toml")}}
 /// Contents of the default configuration file.
 const CONFIG_DEFAULT: &str = include_str!(filename!("cfg_default"));
 const CONFIG_PATH: &str = filename!(env!("CARGO_PKG_NAME"));
+const CONFIG_SIZE: usize = 2048;
 
 
 /// Locate the Path of the Config File.
@@ -25,6 +26,13 @@ fn find_path() -> Option<PathBuf> {
     }
 
     path
+}
+
+
+fn lower(vec: &mut Vec<String>) {
+    for name in vec.iter_mut() {
+        name.make_ascii_lowercase();
+    }
 }
 
 
@@ -128,8 +136,6 @@ impl Config {
                 println!("Failed to write default Config: {}", e);
                 1
             } else if let Err(e) = file.flush() {
-                // println!("Failed to flush output stream: {}", e);
-                // println!("The file was written, but may be incomplete.");
                 println!("Failed to flush output stream: {}\n\
                 The file was written, but may be incomplete.", e);
                 1
@@ -153,11 +159,13 @@ impl Config {
             file.flush()?;
         }
 
-        let mut data = String::new();
-        let mut file = File::open(&path)?;
-        file.read_to_string(&mut data)?;
+        let mut data = String::with_capacity(CONFIG_SIZE);
+        { File::open(&path)?.read_to_string(&mut data)? };
 
-        Ok(toml::from_str(&data)?)
+        let mut new: Config = toml::from_str(&data)?;
+        new.lower();
+
+        Ok(new)
     }
 
     pub fn setup() -> Result<Self, ConfigError> {
@@ -165,5 +173,13 @@ impl Config {
             Some(path) => Self::from_path(path),
             None => Err(ConfigError::NoPath),
         }
+    }
+}
+
+
+impl Config {
+    pub fn lower(&mut self) {
+        lower(&mut self.bot.admins);
+        lower(&mut self.bot.blacklist);
     }
 }
