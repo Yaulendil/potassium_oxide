@@ -94,13 +94,13 @@ impl<'b> Bot<'b> {
             .expect("o no");
 
         let future = async move {
-            println!("Connecting...");
+            info!("Connecting...");
             let mut runner = AsyncRunner::connect(
                 connector::smol::Connector::twitch().unwrap(),
                 &uconf,
             ).await.unwrap();
 
-            println!("Connected.");
+            info!("Connected.");
             // println!("Connected. Identity: {:#?}", runner.identity);
 
             let client = Client::new(self.channel.clone(), &mut runner).await;

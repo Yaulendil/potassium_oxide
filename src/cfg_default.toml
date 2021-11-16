@@ -1,7 +1,7 @@
 # Options for authentication with Twitch.
 [auth]
 username = "xXxAUCTIONZ_420xXx"
-client_key = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+#client_key = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 oauth = "oauth:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 

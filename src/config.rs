@@ -61,7 +61,7 @@ impl Display for ConfigError {
                 write!(f, "Failed to find Configuration filepath.")
             }
             ConfigError::ParseError(err) => {
-                write!(f, "Failed to parse Configuration file: {}", err)
+                write!(f, "Failed to parse Configuration: {}", err)
             }
         }
     }
@@ -71,7 +71,7 @@ impl Display for ConfigError {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ConfigAuth {
     pub username: String,
-    pub client_key: String,
+    // pub client_key: String,
     pub oauth: String,
 }
 
