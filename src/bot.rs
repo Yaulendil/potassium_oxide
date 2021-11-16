@@ -5,8 +5,21 @@ use auction::*;
 use client::Client;
 use crate::config::Config;
 use parking_lot::Mutex;
-use std::time::{Duration, Instant};
+use std::{sync::Arc, time::{Duration, Instant}};
 use twitchchat::{connector, messages, runner::AsyncRunner, Status, UserConfig};
+
+
+fn substring_to_end<'a, 'b>(main: &'a str, sub: &'b str) -> Option<&'a str> {
+    let valid = main.as_bytes().as_ptr_range();
+
+    if !sub.is_empty() && valid.contains(&sub.as_ptr()) {
+        let idx = unsafe { sub.as_ptr().offset_from(valid.start) } as usize;
+
+        Some(&main[idx..])
+    } else {
+        None
+    }
+}
 
 
 pub enum BotExit {
@@ -21,16 +34,16 @@ pub struct Bot<'b> {
     channel: String,
     config: &'b Config,
     client: Option<Client>,
-    auction: Mutex<Option<Auction>>,
+    auction: Arc<Mutex<Option<Auction>>>,
 }
 
 impl<'b> Bot<'b> {
     pub fn new(channel: String, config: &'b Config) -> Result<Self, BotExit> {
-        Ok(Self { channel, config, client: None, auction: Mutex::new(None) })
+        Ok(Self { channel, config, client: None, auction: Default::default() })
     }
 
     pub fn emit(&self, content: impl std::fmt::Display) {
-        println!("BOT -> {}: {}", self.channel, content);
+        println!("BOT -> [#{}] {}", self.channel, content);
     }
 
     pub async fn send(&self, msg: impl AsRef<str>) {
@@ -91,6 +104,94 @@ impl<'b> Bot<'b> {
         }
     }
 
+    async fn handle_command(&mut self, msg: &messages::Privmsg<'_>, words: &[&str]) {
+        let author = msg.display_name().unwrap_or_else(|| msg.name());
+
+        match words {
+            ["auction", subcom, args @ ..]
+            => if self.config.bot.admins.contains(&msg.name().to_owned())
+                || msg.is_broadcaster()
+                || msg.is_moderator()
+            {
+                match *subcom {
+                    "start" => {
+                        let mut lock = self.auction.lock();
+                        if lock.is_some() { return; }
+
+                        let mut itr = args.iter();
+                        let mut min = self.config.bot.default_minimum;
+                        let mut sec = self.config.bot.default_duration;
+
+                        while let Some(flag) = itr.next() {
+                            match *flag {
+                                "-m" => if let Some(val) = itr.next() {
+                                    if let Ok(v) = val.parse() {
+                                        min = v;
+                                    }
+                                }
+                                "-t" => if let Some(val) = itr.next() {
+                                    if let Ok(v) = val.parse() {
+                                        sec = v;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        *lock = Some(Auction::new(
+                            &self.config,
+                            Duration::from_secs(sec),
+                            min,
+                        ));
+                    }
+                    "stop" => {
+                        let mut lock = self.auction.lock();
+                        if lock.is_none() { return; }
+
+                        *lock = None;
+                    }
+                    _ => {}
+                }
+            }
+            ["bid", arg, ..] => match substring_to_end(msg.data(), arg)
+                .unwrap_or(arg).trim_start_matches('$').parse::<usize>()
+            {
+                Ok(bid) => if let Some(auction) = self.auction.lock().as_mut() {
+                    match auction.bid(msg.name(), bid) {
+                        BidResult::Ok => self.send(&format!(
+                            "@{} has bid {}.",
+                            author, usd!(bid),
+                        )).await,
+                        BidResult::RepeatBidder => self.send(&format!(
+                            "@{}: You are already the top bidder.",
+                            author,
+                        )).await,
+                        BidResult::AboveMaximum(max) => self.send(&format!(
+                            "@{}: You can only raise by a maximum of {}.",
+                            author, usd!(max),
+                        )).await,
+                        BidResult::BelowMinimum(min) => self.send(&format!(
+                            "@{}: The minimum bid is {}.",
+                            author, usd!(min),
+                        )).await,
+                        BidResult::DoesNotRaise(cur) => self.send(&format!(
+                            "@{}: The current bid is {}.",
+                            author, usd!(cur),
+                        )).await,
+                    }
+                }
+                Err(..) => {
+                    self.send("A bid must be a whole number of USD.").await;
+                }
+            }
+            ["echo", arg, ..] => self.send(&format!(
+                "{} said: {:?}",
+                author, substring_to_end(msg.data(), arg).unwrap_or(arg),
+            )).await,
+            _ => {}
+        }
+    }
+
     async fn handle_message(&mut self, message: messages::Commands<'_>) {
         use messages::Commands::*;
 
@@ -101,55 +202,7 @@ impl<'b> Bot<'b> {
 
                 let words: Vec<&str> = line.split_whitespace().collect();
 
-                match words.as_slice() {
-                    ["auction", subcom, args @ ..]
-                    => if self.config.bot.admins.contains(&msg.name().to_owned())
-                        || msg.is_broadcaster()
-                        || msg.is_moderator()
-                    {
-                        match *subcom {
-                            "start" => {
-                                let mut lock = self.auction.lock();
-                                if lock.is_some() { return; }
-
-                                let mut itr = args.iter();
-                                let mut min = self.config.bot.default_minimum;
-                                let mut sec = self.config.bot.default_duration;
-
-                                while let Some(flag) = itr.next() {
-                                    match *flag {
-                                        "-m" => if let Some(val) = itr.next() {
-                                            if let Ok(v) = val.parse() {
-                                                min = v;
-                                            }
-                                        }
-                                        "-t" => if let Some(val) = itr.next() {
-                                            if let Ok(v) = val.parse() {
-                                                sec = v;
-                                            }
-                                        }
-                                        _ => {}
-                                    }
-                                }
-
-                                *lock = Some(Auction::new(
-                                    &self.config,
-                                    Duration::from_secs(sec),
-                                    min,
-                                ));
-                            }
-                            "stop" => {
-                                let mut lock = self.auction.lock();
-                                if lock.is_none() { return; }
-
-                                *lock = None;
-                            }
-                            _ => {}
-                        }
-                    }
-                    ["bid", arg, ..] => {}
-                    _ => {}
-                }
+                self.handle_command(&msg, &words).await;
             },
 
             // Raw(_) => {}
