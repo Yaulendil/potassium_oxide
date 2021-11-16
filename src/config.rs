@@ -8,7 +8,7 @@ macro_rules! filename {($name:expr) => {concat!($name, ".toml")}}
 
 
 /// Contents of the default configuration file.
-const CONFIG_DEFAULT: &str = include_str!(filename!("../cfg_default"));
+const CONFIG_DEFAULT: &str = include_str!(filename!("cfg_default"));
 const CONFIG_PATH: &str = filename!(env!("CARGO_PKG_NAME"));
 
 
