@@ -1,11 +1,8 @@
 use std::time::{Duration, Instant};
 
 
-type Money = usize;
-
-
 pub struct Bid {
-    pub amount: Money,
+    pub amount: usize,
     pub bidder: String,
 }
 
@@ -13,9 +10,9 @@ pub struct Bid {
 pub enum BidResult {
     Ok,
     RepeatBidder,
-    AboveMaximum(Money),
-    BelowMinimum(Money),
-    DoesNotRaise(Money),
+    AboveMaximum(usize),
+    BelowMinimum(usize),
+    DoesNotRaise(usize),
 }
 
 
@@ -23,8 +20,8 @@ pub struct Auction {
     current_bid: Option<Bid>,
 
     helmet: Duration,
-    max_raise: Money,
-    min_bid: Money,
+    max_raise: usize,
+    min_bid: usize,
 
     time_begin: Instant,
     time_close: Instant,
@@ -34,7 +31,7 @@ impl Auction {
     pub fn new(
         config: &crate::Config,
         duration: Duration,
-        min_bid: Money,
+        min_bid: usize,
     ) -> Self {
         let now = Instant::now();
 
@@ -51,13 +48,13 @@ impl Auction {
     pub fn bid(
         &mut self,
         name_new: impl AsRef<str>,
-        bid_new: Money,
+        bid_new: usize,
     ) -> BidResult {
         if let Some(Bid {
             amount: bid_current,
             bidder: ref name_current,
         }) = self.current_bid {
-            if name_new.as_ref() == name_current.as_str() {
+            if name_new.as_ref().eq_ignore_ascii_case(name_current) {
                 return BidResult::RepeatBidder;
             }
 
@@ -97,5 +94,26 @@ impl Auction {
 
     pub fn remaining(&self) -> Option<Duration> {
         self.time_close.checked_duration_since(Instant::now())
+    }
+}
+
+impl Auction {
+    pub fn explain(&self, prefix: &str) -> String {
+        format!(
+            "ATTENTION: The Auction will run for {time}. Submit a bid by \
+            posting '{prefix}bid <amount>'. Focus on this chat, NOT any 'live' \
+            video, since there may be a delay. You cannot raise by more than \
+            {max_raise}. I will confirm bids in chat. At the end, I will do a \
+            final 5–1 countdown, after which the Auction will be over. The \
+            person with the highest bid at that time will be declared the \
+            winner, and they will have to tip that amount in order to claim \
+            their prize. Bidding starts at {min_bid}.",
+            max_raise=usd!(self.max_raise),
+            min_bid=usd!(self.min_bid),
+            prefix=prefix,
+            time=humantime::format_duration(
+                self.time_close.saturating_duration_since(self.time_begin)
+            ),
+        )
     }
 }

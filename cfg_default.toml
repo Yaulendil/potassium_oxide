@@ -11,9 +11,11 @@ oauth = "oauth:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 #   in their own channel. This option is a list of usernames that are allowed to
 #   control Auctions in ANY channel; Intended for cases where the maintainer of
 #   this instance is not a Moderator.
+# NOTE: These usernames MUST be lowercase.
 admins = []
 
 # Commands invoked by any username in this list will not be processed.
+# NOTE: These usernames MUST be lowercase.
 blacklist = []
 
 default_duration = 180

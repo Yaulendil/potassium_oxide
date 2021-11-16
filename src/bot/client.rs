@@ -25,6 +25,7 @@ impl Client {
     }
 
     pub async fn send(&mut self, msg: impl AsRef<str>) -> smol::io::Result<()> {
+        println!("BOT -> [#{}] {:?}", &self.channel, msg.as_ref());
         self.writer.encode(commands::privmsg(&self.channel, msg.as_ref())).await
     }
 

@@ -5,11 +5,12 @@ use auction::*;
 use client::Client;
 use crate::config::Config;
 use parking_lot::Mutex;
-use std::{sync::Arc, time::{Duration, Instant}};
+use smol::block_on;
+use std::{sync::Arc, thread::{sleep, spawn}, time::{Duration, Instant}};
 use twitchchat::{connector, messages, runner::AsyncRunner, Status, UserConfig};
 
 
-fn substring_to_end<'a, 'b>(main: &'a str, sub: &'b str) -> Option<&'a str> {
+fn substring_to_end<'a>(main: &'a str, sub: &str) -> Option<&'a str> {
     let valid = main.as_bytes().as_ptr_range();
 
     if !sub.is_empty() && valid.contains(&sub.as_ptr()) {
@@ -18,6 +19,42 @@ fn substring_to_end<'a, 'b>(main: &'a str, sub: &'b str) -> Option<&'a str> {
         Some(&main[idx..])
     } else {
         None
+    }
+}
+
+
+fn auction_check(lock: &mut Option<Auction>) -> Option<String> {
+    match lock {
+        Some(auction) => match auction.remaining() {
+            Some(time) => match time.as_secs() + 1 {
+                t @ 1..=5 => Some(format!("Auction: {}...", t)),
+
+                t @ (10 | 15 | 30 | 60 // <=1m
+                | 120 | 300 | 600 | 900 | 1800 | 3600 // <=1h
+                | 7200 | 10800) => match auction.get_bid() {
+                    Some(Bid { amount, .. }) => Some(format!(
+                        "Auction: {} seconds remain. The current bid is {}.",
+                        t, usd!(amount),
+                    )),
+                    None => Some(format!("Auction: {} seconds remain.", t)),
+                }
+
+                _ => None,
+            }
+            None => {
+                let out = match auction.get_bid() {
+                    Some(Bid { amount, bidder }) => Some(format!(
+                        "The Auction has been won by @{}, with a bid of {}.",
+                        bidder, usd!(amount),
+                    )),
+                    None => Some("The Auction has ended with no bids.".into()),
+                };
+
+                lock.take();
+                out
+            }
+        }
+        None => None,
     }
 }
 
@@ -42,13 +79,8 @@ impl<'b> Bot<'b> {
         Ok(Self { channel, config, client: None, auction: Default::default() })
     }
 
-    pub fn emit(&self, content: impl std::fmt::Display) {
-        println!("BOT -> [#{}] {}", self.channel, content);
-    }
-
     pub async fn send(&self, msg: impl AsRef<str>) {
         if let Some(mut client) = self.client.clone() {
-            self.emit(msg.as_ref());
             client.send(msg).await.unwrap();
         }
     }
@@ -68,30 +100,44 @@ impl<'b> Bot<'b> {
                 &uconf,
             ).await.unwrap();
 
-            println!("Connected. Identity: {:#?}", runner.identity);
+            println!("Connected.");
+            // println!("Connected. Identity: {:#?}", runner.identity);
 
             let client = Client::new(self.channel.clone(), &mut runner).await;
-            let timer = smol::spawn({
+
+            let auction_loop = {
                 let mut client = client.clone();
+                let arc = self.auction.clone();
 
-                async move {
-                    smol::Timer::after(Duration::from_secs(10)).await;
+                spawn(move || {
+                    const INC: Duration = Duration::from_secs(1);
 
-                    client.send("qwert").await.unwrap();
-                    smol::Timer::after(Duration::from_secs(1)).await;
-                    client.quit().await;
-                }
-            });
+                    let mut time = Instant::now();
+
+                    while crate::running() {
+                        if let Some(mut lock) = arc.try_lock_until(time) {
+                            if let Some(text) = auction_check(&mut lock) {
+                                block_on(client.send(text)).unwrap();
+                            }
+                        }
+
+                        time += INC;
+                        sleep(time.saturating_duration_since(Instant::now()));
+                    }
+
+                    block_on(client.quit());
+                })
+            };
 
             self.client = Some(client);
-            self.send("asdf").await;
 
             let res = self.main_loop(runner).await;
-            timer.await;
+            auction_loop.join().expect("Failed to rejoin Auction thread.");
+            println!();
             res
         };
 
-        smol::block_on(future)
+        block_on(future)
     }
 
     async fn main_loop(&mut self, mut runner: AsyncRunner) -> Result<BotExit, BotExit> {
@@ -116,7 +162,11 @@ impl<'b> Bot<'b> {
                 match *subcom {
                     "start" => {
                         let mut lock = self.auction.lock();
-                        if lock.is_some() { return; }
+                        if lock.is_some() {
+                            self.send("An Auction is already running; Invoke \
+                            '+auction stop' to cancel it.").await;
+                            return;
+                        }
 
                         let mut itr = args.iter();
                         let mut min = self.config.bot.default_minimum;
@@ -138,18 +188,18 @@ impl<'b> Bot<'b> {
                             }
                         }
 
-                        *lock = Some(Auction::new(
+                        let new = lock.insert(Auction::new(
                             &self.config,
                             Duration::from_secs(sec),
                             min,
                         ));
-                    }
-                    "stop" => {
-                        let mut lock = self.auction.lock();
-                        if lock.is_none() { return; }
 
-                        *lock = None;
+                        self.send(new.explain(&self.config.bot.prefix)).await;
                     }
+                    "stop" => match self.auction.lock().take() {
+                        Some(..) => self.send("Auction stopped.").await,
+                        None => self.send("No Auction is currently running.").await,
+                    },
                     _ => {}
                 }
             }
@@ -157,7 +207,7 @@ impl<'b> Bot<'b> {
                 .unwrap_or(arg).trim_start_matches('$').parse::<usize>()
             {
                 Ok(bid) => if let Some(auction) = self.auction.lock().as_mut() {
-                    match auction.bid(msg.name(), bid) {
+                    match auction.bid(&author, bid) {
                         BidResult::Ok => self.send(&format!(
                             "@{} has bid {}.",
                             author, usd!(bid),
@@ -227,48 +277,6 @@ impl<'b> Bot<'b> {
             // Whisper(_) => {}
 
             _ => {}
-        }
-    }
-}
-
-impl<'b> Bot<'b> {
-    async fn auction_check(&self) {
-        let mut lock = self.auction.lock();
-
-        if let Some(auction) = lock.as_mut() {
-            match auction.remaining() {
-                Some(time) => match time.as_secs() {
-                    t @ 1..=5 => {
-                        self.send(format!("Auction: {}...", t)).await;
-                    }
-
-                    // t @ 1 => {
-                    //     self.emit(format!("Auction: {} second remains.", t));
-                    // }
-                    1 => self.send("Auction: 1 second remains.").await,
-
-                    // t @ (2 | 3 | 4 | 5 | 10 | 15 | 30 | 60 // <=1m
-                    t @ (2..=5 | 10 | 15 | 30 | 60 // <=1m
-                    | 120 | 300 | 600 | 900 | 1800 | 3600 // <=1h
-                    | 7200 | 10800) => {
-                        self.send(format!("Auction: {} seconds remain.", t)).await;
-                    }
-
-                    _ => {} // NOP
-                }
-                None => {
-                    if let Some(Bid { amount, bidder }) = auction.get_bid() {
-                        self.send(format!(
-                            "The Auction has been won by @{}, with a bid of {}.",
-                            bidder, usd!(amount),
-                        )).await;
-                    } else {
-                        self.send("The Auction has ended with no bids.").await;
-                    }
-
-                    lock.take();
-                }
-            }
         }
     }
 }
