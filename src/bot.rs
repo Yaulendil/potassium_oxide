@@ -150,7 +150,10 @@ impl<'b> Bot<'b> {
             }
         };
 
-        runner.part(&self.channel).await.unwrap();
+        if runner.is_on_channel(&self.channel) {
+            runner.part(&self.channel).await.unwrap();
+        }
+
         ret
     }
 

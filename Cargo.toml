@@ -1,10 +1,12 @@
 [package]
 name = "potassium_oxide"
+description = "Run an Auction bot in Twitch chat via the IRC Bridge."
 version = "0.1.0"
 edition = "2021"
 
 
 [dependencies]
+argh = "0.1.6"
 ctrlc = "3.2"
 dirs = "4.0.0"
 humantime = "2.1"

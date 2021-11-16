@@ -1,6 +1,10 @@
 use dirs::config_dir;
-use std::{fs::File, io::{Error as ErrorIo, Read, Write}, path::PathBuf};
-use std::fmt::{Display, Formatter};
+use std::{
+    fmt::{Display, Formatter},
+    fs::File,
+    io::{Error as ErrorIo, Read, Write},
+    path::{Path, PathBuf},
+};
 use toml::de::Error as ErrorToml;
 
 
@@ -98,14 +102,52 @@ pub struct Config {
 
 
 impl Config {
-    pub fn from_path(path: impl Into<PathBuf>) -> Result<Self, ConfigError> {
-        let path: PathBuf = path.into();
+    pub fn ensure(path_opt: Option<PathBuf>, force: bool) -> i32 {
+        let path: PathBuf = match path_opt.or_else(find_path) {
+            Some(path) => path,
+            None => {
+                println!("Failed to find a path for the Config file.");
+                return 1;
+            }
+        };
+
+        if !force && path.exists() {
+            println!("Found existing Config file: {}", path.to_string_lossy());
+            0
+        } else {
+            println!("Creating new Config file: {}", path.to_string_lossy());
+            let mut file = match File::create(&path) {
+                Ok(file) => file,
+                Err(e) => {
+                    println!("Failed to create file: {}", e);
+                    return 1;
+                }
+            };
+
+            if let Err(e) = file.write_all(CONFIG_DEFAULT.as_bytes()) {
+                println!("Failed to write default Config: {}", e);
+                1
+            } else if let Err(e) = file.flush() {
+                // println!("Failed to flush output stream: {}", e);
+                // println!("The file was written, but may be incomplete.");
+                println!("Failed to flush output stream: {}\n\
+                The file was written, but may be incomplete.", e);
+                1
+            } else {
+                println!("Default Config written successfully.");
+                0
+            }
+        }
+    }
+
+    pub fn from_path(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
+        let path = path.as_ref();
 
         if path.exists() {
-            info!("Using Configuration file: {}", path.to_string_lossy());
+            info!("Using existing Config file: {}", path.to_string_lossy());
         } else {
             let mut file = File::create(&path)?;
-            info!("New Configuration file created: {}", path.to_string_lossy());
+            info!("New Config file created: {}", path.to_string_lossy());
 
             file.write_all(CONFIG_DEFAULT.as_bytes())?;
             file.flush()?;
@@ -123,23 +165,5 @@ impl Config {
             Some(path) => Self::from_path(path),
             None => Err(ConfigError::NoPath),
         }
-    }
-}
-
-
-// impl<P: Into<PathBuf>> TryFrom<P> for Config {
-//     type Error = ConfigError;
-//
-//     fn try_from(path: P) -> Result<Self, Self::Error> {
-//         Self::from_path(path)
-//     }
-// }
-
-
-impl TryFrom<PathBuf> for Config {
-    type Error = ConfigError;
-
-    fn try_from(path: PathBuf) -> Result<Self, Self::Error> {
-        Self::from_path(path)
     }
 }

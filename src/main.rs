@@ -1,19 +1,53 @@
+use argh::{from_env, FromArgs};
 use potassium_oxide::*;
-use std::{env::args, process::exit, thread::spawn};
+use std::{path::PathBuf, process::exit, thread::spawn};
+
+
+/**
+Run an Auction bot in Twitch chat via the IRC Bridge.
+
+Exit Status:
+  0 :: Success.
+  _ :: // TODO
+*/ //  NOTE: Block comment is necessary here to properly layout help text.
+#[derive(FromArgs)]
+struct Command {
+    /// channels to be joined
+    #[argh(positional, arg_name = "CHANNEL")]
+    channels: Vec<String>,
+
+    /// specify a path for the Config file
+    #[argh(option, long = "config", arg_name = "PATH")]
+    cfg_path: Option<PathBuf>,
+
+    /// ensure the existence of a Config file and exit
+    #[argh(switch)]
+    mkconf: bool,
+
+    /// overwrite any existing Config file with the default values
+    #[argh(switch)]
+    reinit: bool,
+}
 
 
 fn main() {
-    ctrlc::set_handler(stop).unwrap_or_else(|_| {
+    if let Err(..) = ctrlc::set_handler(stop) {
         fatal!("Failed to set Interrupt Handler.");
         exit(1);
-    });
+    }
 
-    let mut config_path: Option<String> = None;
-    let channels: Vec<String> = args().skip(1).collect();
+    let Command { cfg_path, channels, mkconf, reinit } = from_env();
 
-    //  TODO: Command line flags.
+    if mkconf {
+        exit(Config::ensure(cfg_path, reinit));
+    }
 
-    match match config_path {
+    if channels.is_empty() {
+        err!("Provide at least one Channel to join.");
+        exit(1);
+    }
+
+    match match cfg_path {
         Some(path) => Config::from_path(path),
         None => Config::setup(),
     } {
