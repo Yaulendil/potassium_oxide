@@ -1,8 +1,6 @@
 use std::time::{Duration, Instant};
 
 
-/// Helmets protect against snipers.
-const HELMET: Duration = Duration::from_secs(15);
 type Money = usize;
 
 
@@ -24,6 +22,7 @@ pub enum BidResult {
 pub struct Auction {
     current_bid: Option<Bid>,
 
+    helmet: Duration,
     max_raise: Money,
     min_bid: Money,
 
@@ -32,12 +31,17 @@ pub struct Auction {
 }
 
 impl Auction {
-    pub fn new(duration: Duration, max_raise: Money, min_bid: Money) -> Self {
+    pub fn new(
+        config: &crate::Config,
+        duration: Duration,
+        min_bid: Money,
+    ) -> Self {
         let now = Instant::now();
 
         Self {
             current_bid: None,
-            max_raise,
+            helmet: Duration::from_secs(config.bot.helmet),
+            max_raise: config.bot.raise_limit,
             min_bid,
             time_begin: now,
             time_close: now + duration,
@@ -74,6 +78,7 @@ impl Auction {
             amount: bid_new,
             bidder: name_new.as_ref().to_string(),
         });
+
         self.deflect_sniper();
         BidResult::Ok
     }
@@ -81,8 +86,8 @@ impl Auction {
     fn deflect_sniper(&mut self) {
         let now = Instant::now();
 
-        if (self.time_close - HELMET) < now {
-            self.time_close = now + HELMET;
+        if (self.time_close - self.helmet) < now {
+            self.time_close += self.helmet;
         }
     }
 

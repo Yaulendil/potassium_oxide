@@ -11,11 +11,9 @@ macro_rules! die {
 
 
 fn main() {
-    // ctrlc::set_handler(k2o::stop).expect("Failed to set Interrupt Handler");
     ctrlc::set_handler(k2o::stop).unwrap_or_else(
         die!("Failed to set Interrupt Handler.")
     );
-    // let config = k2o::Config::setup().unwrap();
 
     match k2o::Config::setup() {
         Ok(config) => {

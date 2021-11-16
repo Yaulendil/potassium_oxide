@@ -16,6 +16,9 @@ admins = []
 # Commands invoked by any username in this list will not be processed.
 blacklist = []
 
+default_duration = 180
+default_minimum = 5
+
 # Helmets protect against snipers. If someone attempts to input a bid when the
 #   remaining time (in seconds) is below the Helmet value, the Helmet value is
 #   added to the timer.

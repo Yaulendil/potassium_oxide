@@ -80,7 +80,11 @@ pub struct ConfigAuth {
 pub struct ConfigBot {
     pub admins: Vec<String>,
     pub blacklist: Vec<String>,
-    pub helmet: usize,
+
+    pub default_duration: u64,
+    pub default_minimum: usize,
+
+    pub helmet: u64,
     pub prefix: String,
     pub raise_limit: usize,
 }

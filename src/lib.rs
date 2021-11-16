@@ -21,7 +21,7 @@ pub fn stop() { STOP.store(true, SeqCst); }
 
 pub fn run_bot(channel: String, config: &Config) -> BotExit {
     match Bot::new(channel, &config) {
-        Ok(mut bot) => bot.run(),
+        Ok(mut bot) => match bot.run() { Ok(e) | Err(e) => e }
         Err(failed) => failed,
     }
 }
