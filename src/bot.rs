@@ -211,28 +211,30 @@ impl<'b> Bot<'b> {
                 .unwrap_or(arg).trim_start_matches('$').parse::<usize>()
             {
                 Ok(bid) => if let Some(auction) = self.auction.lock().as_mut() {
-                    match auction.bid(&author, bid) {
-                        BidResult::Ok => self.send(&format!(
+                    let reply: String = match auction.bid(&author, bid) {
+                        BidResult::Ok => format!(
                             "@{} has bid {}.",
                             author, usd!(bid),
-                        )).await,
-                        BidResult::RepeatBidder => self.send(&format!(
+                        ),
+                        BidResult::RepeatBidder => format!(
                             "@{}: You are already the top bidder.",
                             author,
-                        )).await,
-                        BidResult::AboveMaximum(max) => self.send(&format!(
+                        ),
+                        BidResult::AboveMaximum(max) => format!(
                             "@{}: You can only raise by a maximum of {}.",
                             author, usd!(max),
-                        )).await,
-                        BidResult::BelowMinimum(min) => self.send(&format!(
+                        ),
+                        BidResult::BelowMinimum(min) => format!(
                             "@{}: The minimum bid is {}.",
                             author, usd!(min),
-                        )).await,
-                        BidResult::DoesNotRaise(cur) => self.send(&format!(
+                        ),
+                        BidResult::DoesNotRaise(cur) => format!(
                             "@{}: The current bid is {}.",
                             author, usd!(cur),
-                        )).await,
-                    }
+                        ),
+                    };
+
+                    self.send(&reply).await;
                 }
                 Err(..) => {
                     self.send("A bid must be a whole number of USD.").await;
