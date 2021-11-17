@@ -3,14 +3,12 @@ use k2o::*;
 use std::{path::PathBuf, process::exit, thread::spawn};
 
 
-/**
-Run an Auction bot in Twitch chat via the IRC Bridge.
-
-Exit Status:
-  0 :: Success.
-  _ :: // TODO
-*/ //  NOTE: Block comment is necessary here to properly layout help text.
+/// Run an Auction bot in Twitch chat via the IRC Bridge.
 #[derive(FromArgs)]
+#[argh(note="\
+A default Configuration file is written upon first execution. The generated
+file must then be modified to supply valid Twitch authentication data before
+a successful connection can be made.")]
 struct Command {
     /// channels to be joined
     #[argh(positional, arg_name = "CHANNEL")]
