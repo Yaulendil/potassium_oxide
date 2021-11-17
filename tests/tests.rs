@@ -1,4 +1,4 @@
-use potassium_oxide::*;
+use k2o::*;
 
 
 #[test]

@@ -346,6 +346,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "k2o"
+version = "0.1.0"
+dependencies = [
+ "argh",
+ "ctrlc",
+ "dirs",
+ "humantime",
+ "parking_lot",
+ "serde",
+ "smol",
+ "toml",
+ "twitchchat",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -463,21 +478,6 @@ dependencies = [
  "log",
  "wepoll-ffi",
  "winapi",
-]
-
-[[package]]
-name = "potassium_oxide"
-version = "0.1.0"
-dependencies = [
- "argh",
- "ctrlc",
- "dirs",
- "humantime",
- "parking_lot",
- "serde",
- "smol",
- "toml",
- "twitchchat",
 ]
 
 [[package]]

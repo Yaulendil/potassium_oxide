@@ -1,5 +1,5 @@
 use argh::{from_env, FromArgs};
-use potassium_oxide::*;
+use k2o::*;
 use std::{path::PathBuf, process::exit, thread::spawn};
 
 
