@@ -1,4 +1,3 @@
-use dirs::config_dir;
 use std::{
     fmt::{Display, Formatter},
     fs::File,
@@ -19,9 +18,30 @@ const CONFIG_SIZE: usize = 2048;
 
 /// Locate the Path of the Config File.
 fn find_path() -> Option<PathBuf> {
-    let mut path: Option<PathBuf> = config_dir();
+    let mut path: Option<PathBuf> = {
+        #[cfg(target_family = "windows")]
+            { dirs::data_local_dir() }
+        #[cfg(not(target_family = "windows"))]
+            { dirs::config_dir() }
+    };
 
     if let Some(dir) = &mut path {
+        #[cfg(target_family = "windows")] {
+            //  On Windows, attempt to place configuration data into another
+            //      subdirectory below the main config directory.
+            dir.push(env!("CARGO_PKG_NAME"));
+
+            if !dir.exists() {
+                //  If the subdirectory does not exist, try to create it.
+                if let Err(..) = std::fs::create_dir(&dir) {
+                    //  If it cannot be created, return to the main directory
+                    //      and succumb to fate.
+                    dir.pop();
+                }
+            }
+        }
+
+        //  Append the config filename to the path of the config directory.
         dir.push(CONFIG_PATH);
     }
 
