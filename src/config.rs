@@ -4,7 +4,7 @@ use std::{
     io::{Error as ErrorIo, Read, Write},
     path::{Path, PathBuf},
 };
-use toml::de::Error as ErrorToml;
+use toml::{de::Error as ErrorToml, map::Map, Value};
 
 
 macro_rules! filename {($name:expr) => {concat!($name, ".toml")}}
@@ -110,6 +110,8 @@ pub struct ConfigAuth {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ConfigBot {
+    pub prefix: String,
+
     pub admins: Vec<String>,
     pub blacklist: Vec<String>,
 
@@ -117,7 +119,6 @@ pub struct ConfigBot {
     pub default_minimum: usize,
 
     pub helmet: u64,
-    pub prefix: String,
     pub raise_limit: usize,
 }
 
@@ -126,6 +127,34 @@ pub struct ConfigBot {
 pub struct Config {
     pub auth: ConfigAuth,
     pub bot: ConfigBot,
+    pub channel: Option<Map<String, Value>>,
+}
+
+
+macro_rules! impl_get {
+    ($($field:ident: $rtype:ty;)*) => {$(
+        pub fn $field(&self, channel: &str) -> $rtype {
+            match self.get(channel, stringify!($field)) {
+                Some(value) => Value::try_into::<$rtype>(value.clone())
+                    .unwrap_or(self.bot.$field),
+                None => self.bot.$field,
+            }
+        }
+    )*};
+}
+
+
+impl Config {
+    fn get(&self, channel: &str, key: &str) -> Option<&Value> {
+        self.channel.as_ref()?.get(channel)?.as_table()?.get(key)
+    }
+
+    impl_get! {
+        default_duration: u64;
+        default_minimum: usize;
+        helmet: u64;
+        raise_limit: usize;
+    }
 }
 
 
@@ -184,6 +213,8 @@ impl Config {
 
         let mut new: Config = toml::from_str(&data)?;
         new.lower();
+
+        // dbg!(&new.channel);
 
         Ok(new)
     }

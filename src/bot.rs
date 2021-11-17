@@ -175,20 +175,34 @@ impl<'b> Bot<'b> {
                             return;
                         }
 
+                        let channel = msg.channel().trim_start_matches('#');
+
                         let mut itr = args.iter();
-                        let mut min = self.config.bot.default_minimum;
-                        let mut sec = self.config.bot.default_duration;
+                        let mut hlm = self.config.helmet(channel);
+                        let mut max = self.config.raise_limit(channel);
+                        let mut min = self.config.default_minimum(channel);
+                        let mut sec = self.config.default_duration(channel);
 
                         while let Some(flag) = itr.next() {
                             match *flag {
+                                "-h" => if let Some(val) = itr.next() {
+                                    if let Ok(vl) = val.parse() {
+                                        hlm = vl;
+                                    }
+                                }
+                                "-r" => if let Some(val) = itr.next() {
+                                    if let Ok(vl) = val.parse() {
+                                        max = vl;
+                                    }
+                                }
                                 "-m" => if let Some(val) = itr.next() {
-                                    if let Ok(v) = val.parse() {
-                                        min = v;
+                                    if let Ok(vl) = val.parse() {
+                                        min = vl;
                                     }
                                 }
                                 "-t" => if let Some(val) = itr.next() {
-                                    if let Ok(v) = val.parse() {
-                                        sec = v;
+                                    if let Ok(vl) = val.parse() {
+                                        sec = vl;
                                     }
                                 }
                                 _ => {}
@@ -196,8 +210,9 @@ impl<'b> Bot<'b> {
                         }
 
                         let new = lock.insert(Auction::new(
-                            &self.config,
                             Duration::from_secs(sec),
+                            Duration::from_secs(hlm),
+                            max,
                             min,
                         ));
 

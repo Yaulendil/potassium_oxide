@@ -29,16 +29,17 @@ pub struct Auction {
 
 impl Auction {
     pub fn new(
-        config: &crate::Config,
         duration: Duration,
+        helmet: Duration,
+        max_raise: usize,
         min_bid: usize,
     ) -> Self {
         let now = Instant::now();
 
         Self {
             current_bid: None,
-            helmet: Duration::from_secs(config.bot.helmet),
-            max_raise: config.bot.raise_limit,
+            helmet,
+            max_raise,
             min_bid,
             time_begin: now,
             time_close: now + duration,
