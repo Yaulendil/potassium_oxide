@@ -19,9 +19,12 @@ pub fn running() -> bool { !STOP.load(SeqCst) }
 pub fn stop() { STOP.store(true, SeqCst); }
 
 
-pub fn run_bot(channel: String, config: &Config) -> BotExit {
+pub fn run_bot(channel: String, config: &Config) {
     match Bot::new(channel, &config) {
-        Ok(mut bot) => match bot.run() { Ok(e) | Err(e) => e }
-        Err(failed) => failed,
+        Err(failed) => eprintln!("Failed to run bot: {:?}", failed),
+        Ok(mut bot) => match bot.run() {
+            Err(failed) => eprintln!("Failed to run bot: {}", failed),
+            Ok(_) => println!("Complete."),
+        }
     }
 }

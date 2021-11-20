@@ -6,15 +6,20 @@ use client::Client;
 use crate::config::Config;
 use humantime::{format_duration, FormattedDuration};
 use parking_lot::Mutex;
-use smol::block_on;
+use smol::{block_on, Timer};
 use std::{sync::Arc, thread::{sleep, spawn}, time::{Duration, Instant}};
 use twitchchat::{
     connector,
     messages::{Commands, Privmsg},
     runner::AsyncRunner,
+    RunnerError,
     Status,
+    twitch::UserConfigError,
     UserConfig,
 };
+
+
+const RECON_DELAY: Duration = Duration::from_secs(10);
 
 
 fn substring_to_end<'a>(main: &'a str, sub: &str) -> Option<&'a str> {
@@ -74,11 +79,33 @@ fn contains<I, T, U>(sequence: I, want: U) -> bool where
 }
 
 
+#[derive(Debug)]
 pub enum BotExit {
-    BotClosed,
+    ConnectionClosed,
     BotExited,
     ClientErr,
     ConfigErr,
+
+    RunnerError(RunnerError),
+    IoError(std::io::Error),
+}
+
+impl From<RunnerError> for BotExit {
+    fn from(e: RunnerError) -> Self {
+        Self::RunnerError(e)
+    }
+}
+
+impl From<std::io::Error> for BotExit {
+    fn from(e: std::io::Error) -> Self {
+        Self::IoError(e)
+    }
+}
+
+impl From<BotExit> for String {
+    fn from(err: BotExit) -> Self {
+        format!("{:?}", err)
+    }
 }
 
 
@@ -110,76 +137,87 @@ impl<'b> Bot<'b> {
         }
     }
 
-    pub fn run(&mut self) -> Result<BotExit, BotExit> {
-        let uconf = UserConfig::builder()
+    pub fn run(&mut self) -> Result<(), String> {
+        match UserConfig::builder()
             .name(&self.config.auth.username)
             .token(&self.config.auth.oauth)
             .enable_all_capabilities()
             .build()
-            .expect("o no");
+        {
+            Ok(conf) => block_on(async move {
+                while crate::running() {
+                    eprintln!("Bot closed: {:?}", self.run_once(&conf).await);
 
-        let future = async move {
-            info!("Connecting...");
-            let mut runner = AsyncRunner::connect(
-                connector::smol::Connector::twitch().unwrap(),
-                &uconf,
-            ).await.unwrap();
+                    if crate::running() {
+                        eprintln!("Reconnecting in {}s.\n", RECON_DELAY.as_secs());
+                        Timer::after(RECON_DELAY).await;
+                    }
+                }
 
-            info!("Connected.");
-            // println!("Connected. Identity: {:#?}", runner.identity);
+                Ok(())
+            }),
+            Err(err) => Err(String::from(match err {
+                UserConfigError::InvalidName => "Invalid Username",
+                UserConfigError::InvalidToken => "Invalid OAuth Token",
+                UserConfigError::PartialAnonymous => "Partial Anonymous login",
+                _ => "Unknown error",
+            })),
+        }
+    }
 
-            let client = Client::new(self.channel.clone(), &mut runner).await;
+    async fn run_once(&mut self, uconf: &UserConfig) -> Result<BotExit, BotExit> {
+        info!("Connecting...");
+        let connection = connector::smol::Connector::twitch()?;
+        let mut runner = AsyncRunner::connect(connection, uconf).await?;
+        info!("Connected.");
 
-            let auction_loop = {
-                let mut client = client.clone();
-                let arc = self.auction.clone();
+        let client = Client::new(self.channel.clone(), &mut runner).await;
 
-                spawn(move || {
-                    const INC: Duration = Duration::from_secs(1);
+        let auction_loop = {
+            let mut cli = client.clone();
+            let arc = self.auction.clone();
 
-                    let mut time = Instant::now();
+            spawn(move || {
+                const INC: Duration = Duration::from_secs(1);
 
-                    while crate::running() {
-                        if let Some(mut lock) = arc.try_lock_until(time) {
-                            if let Some(text) = auction_check(&mut lock) {
-                                block_on(client.send(text)).unwrap();
+                let mut time = Instant::now();
+
+                while crate::running() {
+                    if let Some(mut lock) = arc.try_lock_until(time) {
+                        if let Some(text) = auction_check(&mut lock) {
+                            if let Err(e) = block_on(cli.send(text)) {
+                                eprintln!("Error on Auction thread: {}", e);
+                                break;
                             }
                         }
-
-                        time += INC;
-                        sleep(time.saturating_duration_since(Instant::now()));
                     }
 
-                    block_on(client.quit());
-                })
-            };
+                    time += INC;
+                    sleep(time.saturating_duration_since(Instant::now()));
+                }
 
-            self.client = Some(client);
-
-            let res = self.main_loop(runner).await;
-
-            auction_loop.join().expect("Failed to rejoin Auction thread.");
-            println!();
-            res
+                block_on(cli.quit());
+            })
         };
 
-        block_on(future)
+        self.client = Some(client);
+        let result = self.main_loop(runner).await;
+        self.client = None;
+
+        auction_loop.join().expect("Failed to rejoin Auction thread.");
+        println!();
+
+        result
     }
 
     async fn main_loop(&mut self, mut runner: AsyncRunner) -> Result<BotExit, BotExit> {
-        let ret = loop {
-            match runner.next_message().await.unwrap() {
+        loop {
+            match runner.next_message().await? {
                 Status::Message(msg) => self.handle_message(msg).await,
                 Status::Quit => break Ok(BotExit::BotExited),
-                Status::Eof => break Ok(BotExit::BotClosed),
+                Status::Eof => break Ok(BotExit::ConnectionClosed),
             }
-        };
-
-        if runner.is_on_channel(&self.channel) {
-            runner.part(&self.channel).await.unwrap();
         }
-
-        ret
     }
 
     async fn handle_command(
