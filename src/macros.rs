@@ -13,32 +13,16 @@ macro_rules! _msg {
     (#WARN) => { "\x1B[33m" };
     (#ERR) => { "\x1B[91m" };
 
-    //  A string literal message.
-    (@$fmt:tt $pre:tt: $text:literal) => {
-        eprintln!(concat!(
-            $crate::_msg!(#$fmt),
-            stringify!($pre), ": ", $text,
-            $crate::_msg!(#RESET),
-        ))
+    //  A string literal, potentially followed by formatting arguments.
+    (@$fmt:tt $pre:tt: $text:literal $($tail:tt)*) => {
+        eprintln!(
+            concat!(
+                $crate::_msg!(#$fmt),
+                stringify!($pre), ": ", $text,
+                $crate::_msg!(#RESET),
+            ) $($tail)*
+        )
     };
-
-    //  A template literal, followed by formatting arguments.
-    (@$fmt:tt $pre:tt: $text:literal, $($tail:tt)+) => {
-        eprintln!(concat!(
-            $crate::_msg!(#$fmt),
-            stringify!($pre), ": ", $text,
-            $crate::_msg!(#RESET),
-        ), $($tail)+)
-    };
-
-    // //  Formatting arguments; Insert a pair of template braces.
-    // (@$fmt:tt $pre:tt: $($tail:tt)+) => {
-    //     eprintln!(concat!(
-    //         $crate::_msg!(#$fmt),
-    //         stringify!($pre), ": {}",
-    //         $crate::_msg!(#RESET),
-    //     ), $($tail)+);
-    // };
 
     //  Formatting arguments; Insert a pair of template braces.
     (@$fmt:tt $pre:tt: $($tail:tt)+) => {_msg!(@$fmt $pre: "{}", $($tail)+)};
