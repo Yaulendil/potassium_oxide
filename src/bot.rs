@@ -80,6 +80,12 @@ impl<'b> Bot<'b> {
         Ok(Self { channel, config, client: None, auction: Default::default() })
     }
 
+    fn authenticate(&self, msg: &messages::Privmsg<'_>) -> bool {
+        self.config.bot.admins.contains(&msg.name().to_owned())
+            || msg.is_broadcaster()
+            || msg.is_moderator()
+    }
+
     pub async fn send(&self, msg: impl AsRef<str>) {
         if let Some(mut client) = self.client.clone() {
             client.send(msg).await.unwrap();
@@ -164,6 +170,7 @@ impl<'b> Bot<'b> {
         words: &[&str],
     ) -> Option<String> {
         let author: &str = msg.display_name().unwrap_or_else(|| msg.name());
+        let usr_op: bool = self.authenticate(msg);
 
         match words {
             ["auction", "status", ..] => {
@@ -189,11 +196,7 @@ impl<'b> Bot<'b> {
                     ),
                 })
             }
-            ["auction", subcom, args @ ..]
-            if self.config.bot.admins.contains(&msg.name().to_owned())
-                || msg.is_broadcaster()
-                || msg.is_moderator()
-            => match *subcom {
+            ["auction", subcom, args @ ..] if usr_op => match *subcom {
                 "start" => {
                     let mut lock = self.auction.lock();
 
