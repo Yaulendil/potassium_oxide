@@ -4,7 +4,7 @@ mod client;
 use auction::*;
 use client::Client;
 use crate::config::Config;
-use humantime::format_duration;
+use humantime::{format_duration, FormattedDuration};
 use parking_lot::Mutex;
 use smol::block_on;
 use std::{sync::Arc, thread::{sleep, spawn}, time::{Duration, Instant}};
@@ -158,25 +158,36 @@ impl<'b> Bot<'b> {
         ret
     }
 
-    async fn handle_command(&mut self, msg: &messages::Privmsg<'_>, words: &[&str]) {
-        let author = msg.display_name().unwrap_or_else(|| msg.name());
+    async fn handle_command(
+        &mut self,
+        msg: &messages::Privmsg<'_>,
+        words: &[&str],
+    ) -> Option<String> {
+        let author: &str = msg.display_name().unwrap_or_else(|| msg.name());
 
         match words {
-            ["auction", "status", ..] => if let Some(auc) = &*self.auction.lock() {
-                self.send(match auc.get_bid() {
+            ["auction", "status", ..] => {
+                let lock = self.auction.lock();
+                let auction: &Auction = lock.as_ref()?;
+                let time: FormattedDuration = format_duration(
+                    auction.remaining().unwrap_or_default(),
+                );
+
+                Some(match auction.get_bid() {
                     None => format!(
-                        "The minimum bid is {}, but there have not been any \
-                        bids yet.",
-                        usd!(auc.get_minimum()),
+                        "The Auction still has {} remaining. The minimum bid \
+                        is {}, but there have not been any bids yet.",
+                        time,
+                        usd!(auction.get_minimum()),
                     ),
                     Some(Bid { amount, bidder }) => format!(
-                        "The Auction has {} remaining, but the current leader \
-                        is {}, who has bid {}.",
-                        format_duration(auc.remaining().unwrap_or_default()),
+                        "The Auction still has {} remaining. The leader is \
+                        currently {}, who bids {}.",
+                        time,
                         bidder,
                         usd!(amount),
                     ),
-                }).await;
+                })
             }
             ["auction", subcom, args @ ..]
             if self.config.bot.admins.contains(&msg.name().to_owned())
@@ -185,66 +196,65 @@ impl<'b> Bot<'b> {
             => match *subcom {
                 "start" => {
                     let mut lock = self.auction.lock();
+
                     if lock.is_some() {
-                        self.send("An Auction is already running; Invoke \
-                        '+auction stop' to cancel it.").await;
-                        return;
-                    }
+                        Some(format!("An Auction is already running; Invoke '{}\
+                        auction stop' to cancel it.", self.config.bot.prefix))
+                    } else {
+                        let channel = msg.channel().trim_start_matches('#');
+                        let mut sec = self.config.default_duration(channel);
+                        let mut min = self.config.default_minimum(channel);
+                        let mut max = self.config.raise_limit(channel);
+                        let mut hlm = self.config.helmet(channel);
+                        let mut tok = args.iter();
 
-                    let channel = msg.channel().trim_start_matches('#');
-
-                    let mut itr = args.iter();
-                    let mut hlm = self.config.helmet(channel);
-                    let mut max = self.config.raise_limit(channel);
-                    let mut min = self.config.default_minimum(channel);
-                    let mut sec = self.config.default_duration(channel);
-
-                    while let Some(flag) = itr.next() {
-                        match *flag {
-                            "-h" => if let Some(val) = itr.next() {
-                                if let Ok(vl) = val.parse() {
-                                    hlm = vl;
+                        while let Some(flag) = tok.next() {
+                            match *flag {
+                                "-h" => if let Some(val) = tok.next() {
+                                    if let Ok(vl) = val.parse() {
+                                        hlm = vl;
+                                    }
                                 }
-                            }
-                            "-r" => if let Some(val) = itr.next() {
-                                if let Ok(vl) = val.parse() {
-                                    max = vl;
+                                "-r" => if let Some(val) = tok.next() {
+                                    if let Ok(vl) = val.parse() {
+                                        max = vl;
+                                    }
                                 }
-                            }
-                            "-m" => if let Some(val) = itr.next() {
-                                if let Ok(vl) = val.parse() {
-                                    min = vl;
+                                "-m" => if let Some(val) = tok.next() {
+                                    if let Ok(vl) = val.parse() {
+                                        min = vl;
+                                    }
                                 }
-                            }
-                            "-t" => if let Some(val) = itr.next() {
-                                if let Ok(vl) = val.parse() {
-                                    sec = vl;
+                                "-t" => if let Some(val) = tok.next() {
+                                    if let Ok(vl) = val.parse() {
+                                        sec = vl;
+                                    }
                                 }
+                                _ => {}
                             }
-                            _ => {}
                         }
+
+                        let new: &mut Auction = lock.insert(Auction::new(
+                            Duration::from_secs(sec),
+                            Duration::from_secs(hlm),
+                            max,
+                            min,
+                        ));
+
+                        Some(new.explain(&self.config.bot.prefix))
                     }
-
-                    let new = lock.insert(Auction::new(
-                        Duration::from_secs(sec),
-                        Duration::from_secs(hlm),
-                        max,
-                        min,
-                    ));
-
-                    self.send(new.explain(&self.config.bot.prefix)).await;
                 }
-                "stop" => match self.auction.lock().take() {
-                    Some(..) => self.send("Auction stopped.").await,
-                    None => self.send("No Auction is currently running.").await,
-                },
-                _ => {}
+                "stop" => Some(match self.auction.lock().take() {
+                    Some(..) => "Auction stopped.".into(),
+                    None => "No Auction is currently running.".into(),
+                }),
+                _ => None,
             }
             ["bid", arg, ..] => match substring_to_end(msg.data(), arg)
                 .unwrap_or(arg).trim_start_matches('$').parse::<usize>()
             {
-                Ok(bid) => if let Some(auction) = self.auction.lock().as_mut() {
-                    let reply: String = match auction.bid(&author, bid) {
+                Ok(bid) => {
+                    Some(match self.auction.lock().as_mut()?.bid(&author, bid) {
                         BidResult::Ok => format!(
                             "@{} has bid {}.",
                             author, usd!(bid),
@@ -265,34 +275,33 @@ impl<'b> Bot<'b> {
                             "@{}: The current bid is {}.",
                             author, usd!(cur),
                         ),
-                    };
-
-                    self.send(&reply).await;
+                    })
                 }
-                Err(..) => {
-                    self.send("A bid must be a whole number of USD.").await;
-                }
+                Err(..) => Some("A bid must be a whole number of USD.".into()),
             }
-            ["echo", arg, ..] => self.send(&format!(
+            #[cfg(debug_assertions)]
+            ["echo", arg, ..] => Some(format!(
                 "{} said: {:?}",
                 author, substring_to_end(msg.data(), arg).unwrap_or(arg),
-            )).await,
-            _ => {}
+            )),
+            _ => None,
         }
     }
 
     async fn handle_message(&mut self, message: messages::Commands<'_>) {
         use messages::Commands::*;
 
-        match message {
+        if let Some(reply) = match message {
             Privmsg(msg) if !self.config.bot.blacklist.contains(&msg.name().to_owned())
             => if let Some(line) = msg.data().strip_prefix(&self.config.bot.prefix) {
                 println!("[{}] {}: {}", msg.channel(), msg.name(), msg.data());
 
                 let words: Vec<&str> = line.split_whitespace().collect();
 
-                self.handle_command(&msg, &words).await;
-            },
+                self.handle_command(&msg, &words).await
+            } else {
+                None
+            }
 
             // Raw(_) => {}
             //
@@ -315,7 +324,9 @@ impl<'b> Bot<'b> {
             // UserState(_) => {}
             // Whisper(_) => {}
 
-            _ => {}
+            _ => None
+        } {
+            self.send(reply).await;
         }
     }
 }
