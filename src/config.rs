@@ -113,7 +113,7 @@ pub struct Config {
 }
 
 
-macro_rules! impl_get {
+macro_rules! impl_getter {
     ($($field:ident: $rtype:ty;)*) => {$(
         pub fn $field(&self, channel: &str) -> $rtype {
             match self.get(channel, stringify!($field)) {
@@ -131,7 +131,7 @@ impl Config {
         self.channel.as_ref()?.get(channel)?.as_table()?.get(key)
     }
 
-    impl_get! {
+    impl_getter! {
         default_duration: u64;
         default_minimum: usize;
         helmet: u64;
