@@ -93,6 +93,8 @@ impl Auction {
         self.current_bid.as_ref()
     }
 
+    pub fn get_minimum(&self) -> usize { self.min_bid }
+
     pub fn remaining(&self) -> Option<Duration> {
         self.time_close.checked_duration_since(Instant::now())
     }

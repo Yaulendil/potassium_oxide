@@ -4,6 +4,7 @@ mod client;
 use auction::*;
 use client::Client;
 use crate::config::Config;
+use humantime::format_duration;
 use parking_lot::Mutex;
 use smol::block_on;
 use std::{sync::Arc, thread::{sleep, spawn}, time::{Duration, Instant}};
@@ -161,69 +162,83 @@ impl<'b> Bot<'b> {
         let author = msg.display_name().unwrap_or_else(|| msg.name());
 
         match words {
+            ["auction", "status", ..] => if let Some(auc) = &*self.auction.lock() {
+                self.send(match auc.get_bid() {
+                    None => format!(
+                        "The minimum bid is {}, but there have not been any \
+                        bids yet.",
+                        usd!(auc.get_minimum()),
+                    ),
+                    Some(Bid { amount, bidder }) => format!(
+                        "The Auction has {} remaining, but the current leader \
+                        is {}, who has bid {}.",
+                        format_duration(auc.remaining().unwrap_or_default()),
+                        bidder,
+                        usd!(amount),
+                    ),
+                }).await;
+            }
             ["auction", subcom, args @ ..]
-            => if self.config.bot.admins.contains(&msg.name().to_owned())
+            if self.config.bot.admins.contains(&msg.name().to_owned())
                 || msg.is_broadcaster()
                 || msg.is_moderator()
-            {
-                match *subcom {
-                    "start" => {
-                        let mut lock = self.auction.lock();
-                        if lock.is_some() {
-                            self.send("An Auction is already running; Invoke \
-                            '+auction stop' to cancel it.").await;
-                            return;
-                        }
-
-                        let channel = msg.channel().trim_start_matches('#');
-
-                        let mut itr = args.iter();
-                        let mut hlm = self.config.helmet(channel);
-                        let mut max = self.config.raise_limit(channel);
-                        let mut min = self.config.default_minimum(channel);
-                        let mut sec = self.config.default_duration(channel);
-
-                        while let Some(flag) = itr.next() {
-                            match *flag {
-                                "-h" => if let Some(val) = itr.next() {
-                                    if let Ok(vl) = val.parse() {
-                                        hlm = vl;
-                                    }
-                                }
-                                "-r" => if let Some(val) = itr.next() {
-                                    if let Ok(vl) = val.parse() {
-                                        max = vl;
-                                    }
-                                }
-                                "-m" => if let Some(val) = itr.next() {
-                                    if let Ok(vl) = val.parse() {
-                                        min = vl;
-                                    }
-                                }
-                                "-t" => if let Some(val) = itr.next() {
-                                    if let Ok(vl) = val.parse() {
-                                        sec = vl;
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-
-                        let new = lock.insert(Auction::new(
-                            Duration::from_secs(sec),
-                            Duration::from_secs(hlm),
-                            max,
-                            min,
-                        ));
-
-                        self.send(new.explain(&self.config.bot.prefix)).await;
+            => match *subcom {
+                "start" => {
+                    let mut lock = self.auction.lock();
+                    if lock.is_some() {
+                        self.send("An Auction is already running; Invoke \
+                        '+auction stop' to cancel it.").await;
+                        return;
                     }
-                    "stop" => match self.auction.lock().take() {
-                        Some(..) => self.send("Auction stopped.").await,
-                        None => self.send("No Auction is currently running.").await,
-                    },
-                    _ => {}
+
+                    let channel = msg.channel().trim_start_matches('#');
+
+                    let mut itr = args.iter();
+                    let mut hlm = self.config.helmet(channel);
+                    let mut max = self.config.raise_limit(channel);
+                    let mut min = self.config.default_minimum(channel);
+                    let mut sec = self.config.default_duration(channel);
+
+                    while let Some(flag) = itr.next() {
+                        match *flag {
+                            "-h" => if let Some(val) = itr.next() {
+                                if let Ok(vl) = val.parse() {
+                                    hlm = vl;
+                                }
+                            }
+                            "-r" => if let Some(val) = itr.next() {
+                                if let Ok(vl) = val.parse() {
+                                    max = vl;
+                                }
+                            }
+                            "-m" => if let Some(val) = itr.next() {
+                                if let Ok(vl) = val.parse() {
+                                    min = vl;
+                                }
+                            }
+                            "-t" => if let Some(val) = itr.next() {
+                                if let Ok(vl) = val.parse() {
+                                    sec = vl;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    let new = lock.insert(Auction::new(
+                        Duration::from_secs(sec),
+                        Duration::from_secs(hlm),
+                        max,
+                        min,
+                    ));
+
+                    self.send(new.explain(&self.config.bot.prefix)).await;
                 }
+                "stop" => match self.auction.lock().take() {
+                    Some(..) => self.send("Auction stopped.").await,
+                    None => self.send("No Auction is currently running.").await,
+                },
+                _ => {}
             }
             ["bid", arg, ..] => match substring_to_end(msg.data(), arg)
                 .unwrap_or(arg).trim_start_matches('$').parse::<usize>()
