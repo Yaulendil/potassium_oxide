@@ -1,6 +1,7 @@
+use directories::ProjectDirs;
 use std::{
     fmt::{Display, Formatter},
-    fs::File,
+    fs::{create_dir, File},
     io::{Error as ErrorIo, Read, Write},
     path::{Path, PathBuf},
 };
@@ -12,40 +13,21 @@ macro_rules! filename {($name:expr) => {concat!($name, ".toml")}}
 
 /// Contents of the default configuration file.
 const CONFIG_DEFAULT: &str = include_str!(filename!("cfg_default"));
-const CONFIG_PATH: &str = filename!(env!("CARGO_PKG_NAME"));
+const CONFIG_PATH: &str = filename!("cfg");
 const CONFIG_SIZE: usize = 2048;
 
 
 /// Locate the Path of the Config File.
 fn find_path() -> Option<PathBuf> {
-    let mut path: Option<PathBuf> = {
-        #[cfg(target_family = "windows")]
-            { dirs::data_local_dir() }
-        #[cfg(not(target_family = "windows"))]
-            { dirs::config_dir() }
-    };
+    let dirs: ProjectDirs = ProjectDirs::from("", "", env!("CARGO_PKG_NAME"))?;
+    let mut path: PathBuf = dirs.config_dir().to_owned();
 
-    if let Some(dir) = &mut path {
-        #[cfg(target_family = "windows")] {
-            //  On Windows, attempt to place configuration data into another
-            //      subdirectory below the main config directory.
-            dir.push(env!("CARGO_PKG_NAME"));
-
-            if !dir.exists() {
-                //  If the subdirectory does not exist, try to create it.
-                if let Err(..) = std::fs::create_dir(&dir) {
-                    //  If it cannot be created, return to the main directory
-                    //      and succumb to fate.
-                    dir.pop();
-                }
-            }
-        }
-
-        //  Append the config filename to the path of the config directory.
-        dir.push(CONFIG_PATH);
+    if !path.exists() {
+        create_dir(&path).ok()?;
     }
 
-    path
+    path.push(CONFIG_PATH);
+    Some(path)
 }
 
 
