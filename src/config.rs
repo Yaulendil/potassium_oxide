@@ -18,11 +18,11 @@ const CONFIG_SIZE: usize = 2048;
 
 
 /// Locate the Path of the Config File.
-fn find_path() -> Option<PathBuf> {
+fn find_path(create_missing: bool) -> Option<PathBuf> {
     let dirs: ProjectDirs = ProjectDirs::from("", "", env!("CARGO_PKG_NAME"))?;
     let mut path: PathBuf = dirs.config_dir().to_owned();
 
-    if !path.exists() {
+    if create_missing && !path.exists() {
         create_dir(&path).ok()?;
     }
 
@@ -142,49 +142,64 @@ impl Config {
 
 impl Config {
     pub fn ensure(path_opt: Option<PathBuf>, force: bool) -> i32 {
-        let path: PathBuf = match path_opt.or_else(find_path) {
-            Some(path) => path,
-            None => {
-                println!("Failed to find a path for the Config file.");
-                return 1;
-            }
-        };
+        match path_opt.or_else(|| find_path(true)) {
+            Some(path) if force || !path.exists() => {
+                println!("Creating new Config file: {}", path.display());
 
-        if !force && path.exists() {
-            println!("Found existing Config file: {}", path.to_string_lossy());
-            0
-        } else {
-            println!("Creating new Config file: {}", path.to_string_lossy());
-            let mut file = match File::create(&path) {
-                Ok(file) => file,
-                Err(e) => {
-                    println!("Failed to create file: {}", e);
-                    return 1;
+                match File::create(&path) {
+                    Ok(mut f) => match f.write_all(CONFIG_DEFAULT.as_bytes()) {
+                        Ok(..) => {
+                            println!("Default Config written successfully.");
+                            0
+                        }
+                        Err(e) => {
+                            println!("Failed to write default Config: {}", e);
+                            1
+                        }
+                    }
+                    Err(e) => {
+                        println!("Failed to create file: {}", e);
+                        1
+                    }
                 }
-            };
-
-            if let Err(e) = file.write_all(CONFIG_DEFAULT.as_bytes()) {
-                println!("Failed to write default Config: {}", e);
-                1
-            } else if let Err(e) = file.flush() {
-                println!("Failed to flush output stream: {}\n\
-                The file was written, but may be incomplete.", e);
-                1
-            } else {
-                println!("Default Config written successfully.");
+            }
+            Some(path) => {
+                println!("Found existing Config file: {}", path.display());
                 0
             }
+            None => {
+                println!("Failed to find a path for the Config file.");
+                1
+            }
         }
+    }
+
+    pub fn find(path_opt: Option<PathBuf>) -> i32 {
+        let opt: Option<PathBuf> = path_opt.or_else(|| find_path(false));
+
+        match &opt {
+            Some(path) if path.exists() => println!(
+                "Found existing Config file: {}",
+                path.display(),
+            ),
+            Some(path) => println!(
+                "Config file does not exist: {}",
+                path.display(),
+            ),
+            None => println!("Failed to find a path for the Config file."),
+        }
+
+        opt.is_none() as i32
     }
 
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
         let path = path.as_ref();
 
         if path.exists() {
-            info!("Using existing Config file: {}", path.to_string_lossy());
+            info!("Using existing Config file: {}", path.display());
         } else {
             let mut file = File::create(&path)?;
-            info!("New Config file created: {}", path.to_string_lossy());
+            info!("New Config file created: {}", path.display());
 
             file.write_all(CONFIG_DEFAULT.as_bytes())?;
             file.flush()?;
@@ -202,7 +217,7 @@ impl Config {
     }
 
     pub fn setup() -> Result<Self, ConfigError> {
-        match find_path() {
+        match find_path(true) {
             Some(path) => Self::from_path(path),
             None => Err(ConfigError::NoPath),
         }

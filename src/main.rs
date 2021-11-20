@@ -18,6 +18,10 @@ struct Command {
     #[argh(option, long = "config", arg_name = "PATH")]
     cfg_path: Option<PathBuf>,
 
+    /// check for the existence of a Config file and exit
+    #[argh(switch)]
+    lsconf: bool,
+
     /// ensure the existence of a Config file and exit
     #[argh(switch)]
     mkconf: bool,
@@ -34,7 +38,11 @@ fn main() {
         exit(1);
     }
 
-    let Command { cfg_path, channels, mkconf, reinit } = from_env();
+    let Command { cfg_path, channels, lsconf, mkconf, reinit } = from_env();
+
+    if lsconf {
+        exit(Config::find(cfg_path));
+    }
 
     if mkconf {
         exit(Config::ensure(cfg_path, reinit));
