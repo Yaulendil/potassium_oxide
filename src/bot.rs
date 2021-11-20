@@ -146,10 +146,10 @@ impl<'b> Bot<'b> {
         {
             Ok(conf) => block_on(async move {
                 while crate::running() {
-                    eprintln!("Bot closed: {:?}", self.run_once(&conf).await);
+                    info!("Bot closed: {:?}", self.run_once(&conf).await);
 
                     if crate::running() {
-                        eprintln!("Reconnecting in {}s.\n", RECON_DELAY.as_secs());
+                        info!("Reconnecting in {}s.\n", RECON_DELAY.as_secs());
                         Timer::after(RECON_DELAY).await;
                     }
                 }
@@ -174,8 +174,8 @@ impl<'b> Bot<'b> {
         let client = Client::new(self.channel.clone(), &mut runner).await;
 
         let auction_loop = {
-            let mut cli = client.clone();
-            let arc = self.auction.clone();
+            let mut cli: Client = client.clone();
+            let arc: Arc<Mutex<Option<Auction>>> = self.auction.clone();
 
             spawn(move || {
                 const INC: Duration = Duration::from_secs(1);
@@ -186,7 +186,7 @@ impl<'b> Bot<'b> {
                     if let Some(mut lock) = arc.try_lock_until(time) {
                         if let Some(text) = auction_check(&mut lock) {
                             if let Err(e) = block_on(cli.send(text)) {
-                                eprintln!("Error on Auction thread: {}", e);
+                                err!("Error on Auction thread: {}", e);
                                 break;
                             }
                         }
@@ -207,15 +207,16 @@ impl<'b> Bot<'b> {
         auction_loop.join().expect("Failed to rejoin Auction thread.");
         println!();
 
-        result
+        Ok(result)
     }
 
-    async fn main_loop(&mut self, mut runner: AsyncRunner) -> Result<BotExit, BotExit> {
+    async fn main_loop(&mut self, mut runner: AsyncRunner) -> BotExit {
         loop {
-            match runner.next_message().await? {
-                Status::Message(msg) => self.handle_message(msg).await,
-                Status::Quit => break Ok(BotExit::BotExited),
-                Status::Eof => break Ok(BotExit::ConnectionClosed),
+            match runner.next_message().await {
+                Ok(Status::Message(msg)) => self.handle_message(msg).await,
+                Ok(Status::Quit) => break BotExit::BotExited,
+                Ok(Status::Eof) => break BotExit::ConnectionClosed,
+                Err(error) => break error.into(),
             }
         }
     }
@@ -312,30 +313,31 @@ impl<'b> Bot<'b> {
             ["bid", arg, ..] => match substring_to_end(msg.data(), arg)
                 .unwrap_or(arg).trim_start_matches('$').parse::<usize>()
             {
-                Ok(bid) => {
-                    Some(match self.auction.lock().as_mut()?.bid(&author, bid) {
-                        BidResult::Ok => format!(
-                            "NEW BID: @{} has bid {}.",
-                            author, usd!(bid),
-                        ),
-                        BidResult::RepeatBidder => format!(
-                            "@{}: You are already the top bidder.",
-                            author,
-                        ),
-                        BidResult::AboveMaximum(max) => format!(
-                            "@{}: You can only raise by a maximum of {}.",
-                            author, usd!(max),
-                        ),
-                        BidResult::BelowMinimum(min) => format!(
-                            "@{}: The minimum bid is {}.",
-                            author, usd!(min),
-                        ),
-                        BidResult::DoesNotRaise(cur) => format!(
-                            "@{}: The current bid is {}.",
-                            author, usd!(cur),
-                        ),
-                    })
-                }
+                Ok(bid) => Some(match self.auction.lock()
+                    .as_mut()?
+                    .bid(&author, bid)
+                {
+                    BidResult::Ok => format!(
+                        "NEW BID: @{} has bid {}.",
+                        author, usd!(bid),
+                    ),
+                    BidResult::RepeatBidder => format!(
+                        "@{}: You are already the top bidder.",
+                        author,
+                    ),
+                    BidResult::AboveMaximum(max) => format!(
+                        "@{}: You can only raise by a maximum of {}.",
+                        author, usd!(max),
+                    ),
+                    BidResult::BelowMinimum(min) => format!(
+                        "@{}: The minimum bid is {}.",
+                        author, usd!(min),
+                    ),
+                    BidResult::DoesNotRaise(cur) => format!(
+                        "@{}: The current bid is {}.",
+                        author, usd!(cur),
+                    ),
+                }),
                 Err(..) => Some(format!(
                     "@{}: A bid must be a whole number of USD.",
                     author,

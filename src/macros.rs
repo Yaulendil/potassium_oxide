@@ -19,7 +19,7 @@ macro_rules! _msg {
             $crate::_msg!(#$fmt),
             stringify!($pre), ": ", $text,
             $crate::_msg!(#RESET),
-        ));
+        ))
     };
 
     //  A template literal, followed by formatting arguments.
@@ -28,7 +28,7 @@ macro_rules! _msg {
             $crate::_msg!(#$fmt),
             stringify!($pre), ": ", $text,
             $crate::_msg!(#RESET),
-        ), $($tail)+);
+        ), $($tail)+)
     };
 
     // //  Formatting arguments; Insert a pair of template braces.
