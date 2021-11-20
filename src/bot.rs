@@ -8,7 +8,13 @@ use humantime::{format_duration, FormattedDuration};
 use parking_lot::Mutex;
 use smol::block_on;
 use std::{sync::Arc, thread::{sleep, spawn}, time::{Duration, Instant}};
-use twitchchat::{connector, messages, runner::AsyncRunner, Status, UserConfig};
+use twitchchat::{
+    connector,
+    messages::{Commands, Privmsg},
+    runner::AsyncRunner,
+    Status,
+    UserConfig,
+};
 
 
 fn substring_to_end<'a>(main: &'a str, sub: &str) -> Option<&'a str> {
@@ -43,7 +49,7 @@ fn auction_check(lock: &mut Option<Auction>) -> Option<String> {
                 _ => None,
             }
             None => {
-                let out = match auction.get_bid() {
+                let out: Option<String> = match auction.get_bid() {
                     Some(Bid { amount, bidder }) => Some(format!(
                         "The Auction has been won by @{}, with a bid of {}.",
                         bidder, usd!(amount),
@@ -57,6 +63,14 @@ fn auction_check(lock: &mut Option<Auction>) -> Option<String> {
         }
         None => None,
     }
+}
+
+
+fn contains<I, T, U>(sequence: I, want: U) -> bool where
+    I: IntoIterator<Item=T>,
+    T: PartialEq<U>,
+{
+    sequence.into_iter().any(|item: T| item == want)
 }
 
 
@@ -80,10 +94,14 @@ impl<'b> Bot<'b> {
         Ok(Self { channel, config, client: None, auction: Default::default() })
     }
 
-    fn authenticate(&self, msg: &messages::Privmsg<'_>) -> bool {
-        self.config.bot.admins.contains(&msg.name().to_owned())
+    fn authenticate(&self, msg: &Privmsg<'_>) -> bool {
+        contains(&self.config.bot.admins, &msg.name())
             || msg.is_broadcaster()
             || msg.is_moderator()
+    }
+
+    fn should_ignore(&self, msg: &Privmsg<'_>) -> bool {
+        contains(&self.config.bot.blacklist, &msg.name())
     }
 
     pub async fn send(&self, msg: impl AsRef<str>) {
@@ -166,7 +184,7 @@ impl<'b> Bot<'b> {
 
     async fn handle_command(
         &mut self,
-        msg: &messages::Privmsg<'_>,
+        msg: &Privmsg<'_>,
         words: &[&str],
     ) -> Option<String> {
         let author: &str = msg.display_name().unwrap_or_else(|| msg.name());
@@ -259,7 +277,7 @@ impl<'b> Bot<'b> {
                 Ok(bid) => {
                     Some(match self.auction.lock().as_mut()?.bid(&author, bid) {
                         BidResult::Ok => format!(
-                            "@{} has bid {}.",
+                            "NEW BID: @{} has bid {}.",
                             author, usd!(bid),
                         ),
                         BidResult::RepeatBidder => format!(
@@ -280,7 +298,10 @@ impl<'b> Bot<'b> {
                         ),
                     })
                 }
-                Err(..) => Some("A bid must be a whole number of USD.".into()),
+                Err(..) => Some(format!(
+                    "@{}: A bid must be a whole number of USD.",
+                    author,
+                )),
             }
             #[cfg(debug_assertions)]
             ["echo", arg, ..] => Some(format!(
@@ -291,11 +312,11 @@ impl<'b> Bot<'b> {
         }
     }
 
-    async fn handle_message(&mut self, message: messages::Commands<'_>) {
-        use messages::Commands::*;
+    async fn handle_message(&mut self, message: Commands<'_>) {
+        use Commands::*;
 
         if let Some(reply) = match message {
-            Privmsg(msg) if !self.config.bot.blacklist.contains(&msg.name().to_owned())
+            Privmsg(msg) if !self.should_ignore(&msg)
             => if let Some(line) = msg.data().strip_prefix(&self.config.bot.prefix) {
                 println!("[{}] {}: {}", msg.channel(), msg.name(), msg.data());
 
