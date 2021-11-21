@@ -7,7 +7,11 @@ use crate::config::Config;
 use humantime::{format_duration, FormattedDuration};
 use parking_lot::Mutex;
 use smol::{block_on, Timer};
-use std::{sync::Arc, thread::{sleep, spawn}, time::{Duration, Instant}};
+use std::{
+    sync::Arc,
+    thread::{Builder, current, sleep},
+    time::{Duration, Instant},
+};
 use twitchchat::{
     connector,
     messages::{Commands, Privmsg},
@@ -88,6 +92,7 @@ pub enum BotExit {
 
     RunnerError(RunnerError),
     IoError(std::io::Error),
+    ThreadPanic,
 }
 
 impl From<RunnerError> for BotExit {
@@ -133,7 +138,7 @@ impl<'b> Bot<'b> {
 
     pub async fn send(&self, msg: impl AsRef<str>) {
         if let Some(mut client) = self.client.clone() {
-            client.send(msg).await.unwrap();
+            client.send(msg).await.ok();
         }
     }
 
@@ -171,43 +176,52 @@ impl<'b> Bot<'b> {
         let mut runner = AsyncRunner::connect(connection, uconf).await?;
         info!("Connected.");
 
-        let client = Client::new(self.channel.clone(), &mut runner).await;
+        let client = Client::new(self.channel.clone(), &mut runner).await?;
 
         let auction_loop = {
             let mut cli: Client = client.clone();
-            let arc: Arc<Mutex<Option<Auction>>> = self.auction.clone();
+            let auction: Arc<Mutex<Option<Auction>>> = self.auction.clone();
+            let subname: String = format!("#{}/auctions", self.channel);
 
-            spawn(move || {
-                const INC: Duration = Duration::from_secs(1);
+            Builder::new().name(subname).spawn(move || {
+                /// Interval between Auction updates.
+                const INTERVAL: Duration = Duration::from_secs(1);
+                /// Timeout period to try locking the Auction Mutex.
+                const TO: Duration = Duration::from_millis(
+                    (INTERVAL.as_millis() / 2) as _
+                );
 
                 let mut time = Instant::now();
 
                 while crate::running() {
-                    if let Some(mut lock) = arc.try_lock_until(time) {
+                    if let Some(mut lock) = auction.try_lock_for(TO) {
                         if let Some(text) = auction_check(&mut lock) {
                             if let Err(e) = block_on(cli.send(text)) {
-                                err!("Error on Auction thread: {}", e);
+                                err!(
+                                    "Error on Auction thread {:?}: {}",
+                                    current().name().unwrap_or_default(), e,
+                                );
                                 break;
                             }
                         }
                     }
 
-                    time += INC;
+                    time += INTERVAL;
                     sleep(time.saturating_duration_since(Instant::now()));
                 }
 
                 block_on(cli.quit());
-            })
+            })?
         };
 
         self.client = Some(client);
         let result = self.main_loop(runner).await;
         self.client = None;
 
-        auction_loop.join().expect("Failed to rejoin Auction thread.");
-        println!();
-
-        Ok(result)
+        match auction_loop.join() {
+            Err(_e) => Err(BotExit::ThreadPanic),
+            Ok(()) => Ok(result),
+        }
     }
 
     async fn main_loop(&mut self, mut runner: AsyncRunner) -> BotExit {

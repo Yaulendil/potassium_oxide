@@ -1,6 +1,6 @@
 use argh::{from_env, FromArgs};
 use k2o::*;
-use std::{path::PathBuf, process::exit, thread::spawn};
+use std::{path::PathBuf, process::exit, thread::Builder};
 
 
 /// Run an Auction bot in Twitch chat via the IRC Bridge.
@@ -33,7 +33,10 @@ struct Command {
 
 
 fn main() {
-    if let Err(..) = ctrlc::set_handler(stop) {
+    if let Err(..) = ctrlc::set_handler(|| {
+        eprintln!("SIGINT");
+        stop();
+    }) {
         fatal!("Failed to set Interrupt Handler.");
         exit(1);
     }
@@ -42,13 +45,9 @@ fn main() {
 
     if lsconf {
         exit(Config::find(cfg_path));
-    }
-
-    if mkconf {
+    } else if mkconf {
         exit(Config::ensure(cfg_path, reinit));
-    }
-
-    if channels.is_empty() {
+    } else if channels.is_empty() {
         err!("Provide at least one Channel to join.");
         exit(1);
     }
@@ -63,7 +62,14 @@ fn main() {
             for channel in channels.into_iter() {
                 info!("Joining #{}...", &channel);
                 let cfg = config.clone();
-                threads.push(spawn(move || run_bot(channel, &cfg)));
+
+                match Builder::new()
+                    .name(format!("#{}", channel))
+                    .spawn(move || run_bot(channel, &cfg))
+                {
+                    Err(error) => err!("Failed to spawn thread: {}", error),
+                    Ok(thread) => threads.push(thread),
+                }
             }
 
             for thread in threads {
