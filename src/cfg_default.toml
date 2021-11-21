@@ -1,41 +1,45 @@
 # Options for authentication with Twitch.
 [auth]
 username = "xXxAUCTIONZ_420xXx"
-#client_key = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 oauth = "oauth:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 
-# Options for the operation of the bot itself.
-[bot]
-# Prefix for commands. Any message that begins with this string will be taken as
-#   a command invocation.
-# This option cannot be overridden per-channel.
-prefix = "+"
-
-# By default, the Broadcaster and Moderators of a channel can control Auctions
-#   in their own channel. This option is a list of usernames that are allowed to
-#   control Auctions in ANY channel; Intended for cases where the maintainer of
-#   this instance is not a Moderator.
-# This option cannot be overridden per-channel.
-admins = []
-
-# Commands invoked by any username in this list will not be processed.
-# This option cannot be overridden per-channel.
-blacklist = []
-
-default_duration = 180
-default_minimum = 5
+# Auction options: These can be overridden with channel-specific configuration,
+#   or by including extra parameters when starting an Auction.
+[auction]
+# The time for which an Auction will be open, in seconds.
+duration = 180
 
 # Helmets protect against snipers. If someone attempts to input a bid when the
 #   remaining time (in seconds) is below the Helmet value, the Helmet value is
 #   added to the timer.
 helmet = 15
 
-# Maximum amount allowed for raising.
-raise_limit = 500
+# Maximum amount by which a new bid is allowed to exceed the previous.
+max_raise = 500
+# Minimum acceptable value for the first bid.
+min_bid = 5
 
 
-# Channel-specific overrides for Bot options.
+[admin]
+# By default, the Broadcaster and Moderators of a channel can control Auctions
+#   in their own channel. This option is a list of usernames that are allowed to
+#   control Auctions in ANY channel; Intended for cases where the maintainer of
+#   this instance is not a Moderator.
+admins = []
+
+# Commands invoked by any username in this list will not be processed.
+blacklist = []
+
+# Prefix for commands. Any message that begins with this string will be taken as
+#   a command invocation.
+prefix = "+"
+
+# Number of seconds to wait before trying to reconnect.
+reconnect = 5
+
+
+# Channel-specific overrides for Auction options.
 [channel.gamesdonequick]
-default_duration = 10
+duration = 10
 helmet = 1

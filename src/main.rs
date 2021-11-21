@@ -26,6 +26,10 @@ struct Command {
     #[argh(switch)]
     mkconf: bool,
 
+    /// check the Config file for validity and exit
+    #[argh(switch)]
+    okconf: bool,
+
     /// overwrite any existing Config file with the default values
     #[argh(switch)]
     reinit: bool,
@@ -41,46 +45,67 @@ fn main() {
         exit(1);
     }
 
-    let Command { cfg_path, channels, lsconf, mkconf, reinit } = from_env();
+    let Command {
+        cfg_path, channels,
+        lsconf, mkconf, okconf, reinit,
+    } = from_env();
 
-    if lsconf {
+    if okconf {
+        use config::ConfigError::ParseError;
+
+        match match cfg_path {
+            Some(path) => Config::from_path(path),
+            None => Config::setup(),
+        } {
+            Ok(..) => println!("Config file is valid."),
+            Err(ParseError(e)) => println!("Config file is NOT valid: {}", e),
+            Err(e) => {
+                err!("Failed to check Config file: {}", e);
+                exit(1);
+            }
+        }
+
+    } else if lsconf {
         exit(Config::find(cfg_path));
+
     } else if mkconf {
         exit(Config::ensure(cfg_path, reinit));
+
     } else if channels.is_empty() {
         err!("Provide at least one Channel to join.");
         exit(1);
-    }
 
-    match match cfg_path {
-        Some(path) => Config::from_path(path),
-        None => Config::setup(),
-    } {
-        Ok(config) => {
-            let mut threads = Vec::with_capacity(channels.len());
+    } else {
+        match match cfg_path {
+            Some(path) => Config::from_path(path),
+            None => Config::setup(),
+        } {
+            Ok(config) => {
+                let mut threads = Vec::with_capacity(channels.len());
 
-            for channel in channels.into_iter() {
-                info!("Joining #{}...", &channel);
-                let cfg = config.clone();
+                for channel in channels.into_iter() {
+                    info!("Joining #{}...", &channel);
+                    let cfg = config.clone();
 
-                match Builder::new()
-                    .name(format!("#{}", channel))
-                    .spawn(move || run_bot(channel, &cfg))
-                {
-                    Err(error) => err!("Failed to spawn thread: {}", error),
-                    Ok(thread) => threads.push(thread),
+                    match Builder::new()
+                        .name(format!("#{}", channel))
+                        .spawn(move || run_bot(channel, &cfg))
+                    {
+                        Err(error) => err!("Failed to spawn thread: {}", error),
+                        Ok(thread) => threads.push(thread),
+                    }
+                }
+
+                for thread in threads {
+                    if let Err(err) = thread.join() {
+                        err!("{:?}", err);
+                    }
                 }
             }
-
-            for thread in threads {
-                if let Err(err) = thread.join() {
-                    err!("{:?}", err);
-                }
+            Err(error) => {
+                err!("{}", &error);
+                exit(error.status());
             }
-        }
-        Err(error) => {
-            fatal!("{}", &error);
-            exit(error.status());
         }
     }
 }

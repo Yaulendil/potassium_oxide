@@ -4,8 +4,10 @@ use std::{
     fs::{create_dir, File},
     io::{Error as ErrorIo, Read, Write},
     path::{Path, PathBuf},
+    time::Duration,
 };
 use toml::{de::Error as ErrorToml, map::Map, Value};
+use twitchchat::twitch::{UserConfig, UserConfigError};
 
 
 macro_rules! filename {($name:expr) => {concat!($name, ".toml")}}
@@ -15,6 +17,14 @@ macro_rules! filename {($name:expr) => {concat!($name, ".toml")}}
 const CONFIG_DEFAULT: &str = include_str!(filename!("cfg_default"));
 const CONFIG_PATH: &str = filename!("cfg");
 const CONFIG_SIZE: usize = 2048;
+
+
+fn contains<I, T, U>(sequence: I, want: U) -> bool where
+    I: IntoIterator<Item=T>,
+    T: PartialEq<U>,
+{
+    sequence.into_iter().any(|item: T| item == want)
+}
 
 
 /// Locate the Path of the Config File.
@@ -84,58 +94,105 @@ impl Display for ConfigError {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ConfigAuth {
-    pub username: String,
-    // pub client_key: String,
-    pub oauth: String,
+    username: String,
+    oauth: String,
 }
 
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct ConfigBot {
-    pub prefix: String,
+pub struct ConfigAdmin {
+    admins: Vec<String>,
+    blacklist: Vec<String>,
 
-    pub admins: Vec<String>,
-    pub blacklist: Vec<String>,
+    prefix: String,
+    reconnect: u64,
+}
 
-    pub default_duration: u64,
-    pub default_minimum: usize,
 
-    pub helmet: u64,
-    pub raise_limit: usize,
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct ConfigAuction {
+    duration: u64,
+    helmet: u64,
+
+    max_raise: usize,
+    min_bid: usize,
 }
 
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Config {
-    pub auth: ConfigAuth,
-    pub bot: ConfigBot,
-    pub channel: Option<Map<String, Value>>,
+    auth: ConfigAuth,
+    admin: ConfigAdmin,
+    auction: ConfigAuction,
+
+    channel: Option<Map<String, Value>>,
 }
 
 
-macro_rules! impl_getter {
-    ($($field:ident: $rtype:ty;)*) => {$(
-        pub fn $field(&self, channel: &str) -> $rtype {
-            match self.get(channel, stringify!($field)) {
-                Some(value) => Value::try_into::<$rtype>(value.clone())
-                    .unwrap_or(self.bot.$field),
-                None => self.bot.$field,
-            }
-        }
-    )*};
-}
-
-
+/// Methods for retrieving configuration data without exposing the Struct.
 impl Config {
     fn get(&self, channel: &str, key: &str) -> Option<&Value> {
         self.channel.as_ref()?.get(channel)?.as_table()?.get(key)
     }
 
-    impl_getter! {
-        default_duration: u64;
-        default_minimum: usize;
-        helmet: u64;
-        raise_limit: usize;
+    pub fn get_auth(&self) -> Result<UserConfig, UserConfigError> {
+        UserConfig::builder()
+            .name(&self.auth.username)
+            .token(&self.auth.oauth)
+            .enable_all_capabilities()
+            .build()
+    }
+
+    pub fn get_duration(&self, channel: &str) -> Duration {
+        Duration::from_secs(match self.get(channel, "duration").cloned() {
+            Some(value) => value.try_into().unwrap_or(self.auction.duration),
+            None => self.auction.duration,
+        })
+    }
+
+    pub fn get_helmet(&self, channel: &str) -> Duration {
+        Duration::from_secs(match self.get(channel, "helmet").cloned() {
+            Some(value) => value.try_into().unwrap_or(self.auction.helmet),
+            None => self.auction.helmet,
+        })
+    }
+
+    pub fn get_max_raise(&self, channel: &str) -> usize {
+        match self.get(channel, "max_raise").cloned() {
+            Some(value) => value.try_into().unwrap_or(self.auction.max_raise),
+            None => self.auction.max_raise,
+        }
+    }
+
+    pub fn get_min_bid(&self, channel: &str) -> usize {
+        match self.get(channel, "min_bid").cloned() {
+            Some(value) => value.try_into().unwrap_or(self.auction.min_bid),
+            None => self.auction.min_bid,
+        }
+    }
+
+    pub fn get_prefix(&self) -> &str {
+        &self.admin.prefix
+    }
+
+    pub const fn get_reconnect(&self) -> Duration {
+        Duration::from_secs(self.admin.reconnect)
+    }
+
+    pub fn is_admin(&self, name: &str) -> bool {
+        contains(&self.admin.admins, name)
+    }
+
+    pub fn is_blacklisted(&self, name: &str) -> bool {
+        contains(&self.admin.blacklist, name)
+    }
+}
+
+
+impl Config {
+    pub fn lower(&mut self) {
+        lower(&mut self.admin.admins);
+        lower(&mut self.admin.blacklist);
     }
 }
 
@@ -202,7 +259,6 @@ impl Config {
             info!("New Config file created: {}", path.display());
 
             file.write_all(CONFIG_DEFAULT.as_bytes())?;
-            file.flush()?;
         }
 
         let mut data = String::with_capacity(CONFIG_SIZE);
@@ -210,8 +266,6 @@ impl Config {
 
         let mut new: Config = toml::from_str(&data)?;
         new.lower();
-
-        // dbg!(&new.channel);
 
         Ok(new)
     }
@@ -221,13 +275,5 @@ impl Config {
             Some(path) => Self::from_path(path),
             None => Err(ConfigError::NoPath),
         }
-    }
-}
-
-
-impl Config {
-    pub fn lower(&mut self) {
-        lower(&mut self.bot.admins);
-        lower(&mut self.bot.blacklist);
     }
 }

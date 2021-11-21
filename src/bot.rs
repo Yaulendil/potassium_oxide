@@ -23,9 +23,6 @@ use twitchchat::{
 };
 
 
-const RECON_DELAY: Duration = Duration::from_secs(10);
-
-
 fn substring_to_end<'a>(main: &'a str, sub: &str) -> Option<&'a str> {
     let valid = main.as_bytes().as_ptr_range();
 
@@ -75,14 +72,6 @@ fn auction_check(lock: &mut Option<Auction>) -> Option<String> {
 }
 
 
-fn contains<I, T, U>(sequence: I, want: U) -> bool where
-    I: IntoIterator<Item=T>,
-    T: PartialEq<U>,
-{
-    sequence.into_iter().any(|item: T| item == want)
-}
-
-
 #[derive(Debug)]
 pub enum BotExit {
     ConnectionClosed,
@@ -122,18 +111,18 @@ pub struct Bot<'b> {
 }
 
 impl<'b> Bot<'b> {
-    pub fn new(channel: String, config: &'b Config) -> Result<Self, BotExit> {
-        Ok(Self { channel, config, client: None, auction: Default::default() })
+    pub fn new(channel: String, config: &'b Config) -> Self {
+        Self { channel, config, client: None, auction: Default::default() }
     }
 
     fn authenticate(&self, msg: &Privmsg<'_>) -> bool {
-        contains(&self.config.bot.admins, &msg.name())
+        self.config.is_admin(msg.name())
             || msg.is_broadcaster()
             || msg.is_moderator()
     }
 
     fn should_ignore(&self, msg: &Privmsg<'_>) -> bool {
-        contains(&self.config.bot.blacklist, &msg.name())
+        self.config.is_blacklisted(msg.name())
     }
 
     pub async fn send(&self, msg: impl AsRef<str>) {
@@ -143,19 +132,15 @@ impl<'b> Bot<'b> {
     }
 
     pub fn run(&mut self) -> Result<(), String> {
-        match UserConfig::builder()
-            .name(&self.config.auth.username)
-            .token(&self.config.auth.oauth)
-            .enable_all_capabilities()
-            .build()
-        {
+        match self.config.get_auth() {
             Ok(conf) => block_on(async move {
                 while crate::running() {
                     info!("Bot closed: {:?}", self.run_once(&conf).await);
 
                     if crate::running() {
-                        info!("Reconnecting in {}s.\n", RECON_DELAY.as_secs());
-                        Timer::after(RECON_DELAY).await;
+                        let delay: Duration = self.config.get_reconnect();
+                        info!("Reconnecting in {}s.\n", delay.as_secs());
+                        Timer::after(delay).await;
                     }
                 }
 
@@ -273,20 +258,25 @@ impl<'b> Bot<'b> {
 
                     if lock.is_some() {
                         Some(format!("An Auction is already running; Invoke '{}\
-                        auction stop' to cancel it.", self.config.bot.prefix))
+                        auction stop' to cancel it.", self.config.get_prefix()))
                     } else {
                         let channel = msg.channel().trim_start_matches('#');
-                        let mut sec = self.config.default_duration(channel);
-                        let mut min = self.config.default_minimum(channel);
-                        let mut max = self.config.raise_limit(channel);
-                        let mut hlm = self.config.helmet(channel);
+                        let mut dur = self.config.get_duration(channel);
+                        let mut hlm = self.config.get_helmet(channel);
+                        let mut max = self.config.get_max_raise(channel);
+                        let mut min = self.config.get_min_bid(channel);
                         let mut tok = args.iter();
 
                         while let Some(flag) = tok.next() {
                             match *flag {
+                                "-d" | "-t" => if let Some(val) = tok.next() {
+                                    if let Ok(vl) = val.parse() {
+                                        dur = Duration::from_secs(vl);
+                                    }
+                                }
                                 "-h" => if let Some(val) = tok.next() {
                                     if let Ok(vl) = val.parse() {
-                                        hlm = vl;
+                                        hlm = Duration::from_secs(vl);
                                     }
                                 }
                                 "-r" => if let Some(val) = tok.next() {
@@ -299,23 +289,15 @@ impl<'b> Bot<'b> {
                                         min = vl;
                                     }
                                 }
-                                "-t" => if let Some(val) = tok.next() {
-                                    if let Ok(vl) = val.parse() {
-                                        sec = vl;
-                                    }
-                                }
                                 _ => {}
                             }
                         }
 
                         let new: &mut Auction = lock.insert(Auction::new(
-                            Duration::from_secs(sec),
-                            Duration::from_secs(hlm),
-                            max,
-                            min,
+                            dur, hlm, max, min,
                         ));
 
-                        Some(new.explain(&self.config.bot.prefix))
+                        Some(new.explain(self.config.get_prefix()))
                     }
                 }
                 "stop" => Some(match self.auction.lock().take() {
@@ -371,7 +353,7 @@ impl<'b> Bot<'b> {
 
         if let Some(reply) = match message {
             Privmsg(msg) if !self.should_ignore(&msg)
-            => if let Some(line) = msg.data().strip_prefix(&self.config.bot.prefix) {
+            => if let Some(line) = msg.data().strip_prefix(self.config.get_prefix()) {
                 println!("[{}] {}: {}", msg.channel(), msg.name(), msg.data());
 
                 let words: Vec<&str> = line.split_whitespace().collect();

@@ -26,11 +26,8 @@ pub fn stop() { STOP.store(true, SeqCst); }
 
 
 pub fn run_bot(channel: String, config: &Config) {
-    match Bot::new(channel, &config) {
-        Err(failed) => err!("Failed to run bot: {:?}", failed),
-        Ok(mut bot) => match bot.run() {
-            Err(failed) => err!("Failed to run bot: {}", failed),
-            Ok(_) => info!("Complete."),
-        }
+    match Bot::new(channel, &config).run() {
+        Err(failed) => err!("Failed to run bot: {}", failed),
+        Ok(..) => info!("Complete."),
     }
 }
