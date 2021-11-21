@@ -354,7 +354,7 @@ impl<'b> Bot<'b> {
         if let Some(reply) = match message {
             Privmsg(msg) if !self.should_ignore(&msg)
             => if let Some(line) = msg.data().strip_prefix(self.config.get_prefix()) {
-                println!("[{}] {}: {}", msg.channel(), msg.name(), msg.data());
+                chat!("({}) {}: {:?}", msg.channel(), msg.name(), msg.data());
 
                 let words: Vec<&str> = line.split_whitespace().collect();
 

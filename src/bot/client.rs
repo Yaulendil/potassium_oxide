@@ -9,8 +9,8 @@ use twitchchat::{
 
 #[derive(Clone)]
 pub struct Client {
-    running: Arc<AtomicBool>,
     channel: String,
+    running: Arc<AtomicBool>,
     handle_quit: NotifyHandle,
     writer: AsyncWriter<MpscWriter>,
 }
@@ -24,8 +24,8 @@ impl Client {
         runner.join(&channel).await?;
 
         Ok(Self {
-            running: Arc::new(AtomicBool::new(true)),
             channel,
+            running: Arc::new(AtomicBool::new(true)),
             handle_quit: runner.quit_handle(),
             writer: runner.writer(),
         })
@@ -37,11 +37,11 @@ impl Client {
 
     pub async fn send(&mut self, msg: impl AsRef<str>) -> std::io::Result<()> {
         if self.is_running() {
-            println!("BOT -> [#{}] {:?}", &self.channel, msg.as_ref());
+            chat!("(-> #{}) {:?}", &self.channel, msg.as_ref());
             self.writer.encode(privmsg(&self.channel, msg.as_ref())).await
         } else {
             warn!("Failed to send message: Client is closed.");
-            println!("BOT -| [#{}] {:?}", &self.channel, msg.as_ref());
+            chat!("(-| #{}) {:?}", &self.channel, msg.as_ref());
             Ok(())
         }
     }
