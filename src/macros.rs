@@ -6,6 +6,7 @@ macro_rules! usd {
 }
 
 
+#[cfg(not(feature = "chrono"))]
 #[macro_export]
 macro_rules! _msg {
     (#RESET) => { "\x1B[m" };
@@ -18,7 +19,7 @@ macro_rules! _msg {
         eprintln!(
             concat!(
                 $crate::_msg!(#$fmt),
-                stringify!($pre), ": ", $text,
+                concat!(stringify!($pre), ": ", $text),
                 $crate::_msg!(#RESET),
             ) $($tail)*
         )
@@ -27,6 +28,32 @@ macro_rules! _msg {
     //  Formatting arguments; Insert a pair of template braces.
     (@$fmt:tt $pre:tt: $($tail:tt)+) => {_msg!(@$fmt $pre: "{}", $($tail)+)};
 }
+
+#[cfg(feature = "chrono")]
+#[macro_export]
+macro_rules! _msg {
+    (#RESET) => { "\x1B[m" };
+    (#FATAL) => { "\x1B[1;93;41m" };
+    (#WARN) => { "\x1B[33m" };
+    (#ERR) => { "\x1B[91m" };
+
+    //  A string literal, potentially followed by formatting arguments.
+    (@$fmt:tt $pre:tt: $text:literal $($tail:tt)*) => {
+        eprintln!(
+            concat!(
+                $crate::_msg!(#$fmt),
+                concat!("[{}] ", stringify!($pre), ": ", $text),
+                $crate::_msg!(#RESET),
+            ),
+            ::chrono::Local::now().format($crate::TS_FMT)
+            $($tail)*
+        )
+    };
+
+    //  Formatting arguments; Insert a pair of template braces.
+    (@$fmt:tt $pre:tt: $($tail:tt)+) => {_msg!(@$fmt $pre: "{}", $($tail)+)};
+}
+
 
 #[macro_export]
 macro_rules! fatal {($($text:tt)+) => {$crate::_msg!(@FATAL FATAL: $($text)+)}}
