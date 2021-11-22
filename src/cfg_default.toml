@@ -20,6 +20,12 @@ max_raise = 500
 # Minimum acceptable value for the first bid.
 min_bid = 5
 
+# The verb that describes the payment method to be used by the winner of an
+#   Auction. For instance, if the proceeds go to charity, "donate" may be
+#   preferable; If the payment is to be in Bits, "cheer" would be the most
+#   descriptive.
+verb = "tip"
+
 
 [admin]
 # By default, the Broadcaster and Moderators of a channel can control Auctions
@@ -43,3 +49,4 @@ reconnect = 5
 [channel.gamesdonequick]
 duration = 10
 helmet = 1
+verb = "donate"

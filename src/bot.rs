@@ -318,7 +318,10 @@ impl Bot {
                             dur, hlm, max, min,
                         ));
 
-                        Some(Message(new.explain(self.config.get_prefix())))
+                        Some(Message(new.explain(
+                            &self.config.get_prefix(),
+                            &self.config.get_verb(channel),
+                        )))
                     }
                 }
                 "stop" => Some(Reply(match self.auction.lock().take() {

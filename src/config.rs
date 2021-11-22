@@ -102,6 +102,8 @@ pub struct ConfigAuction {
 
     max_raise: usize,
     min_bid: usize,
+
+    verb: String,
 }
 
 
@@ -229,6 +231,13 @@ impl Config {
 
     pub const fn get_reconnect(&self) -> Duration {
         Duration::from_secs(self.admin.reconnect)
+    }
+
+    pub fn get_verb(&self, channel: &str) -> &str {
+        match self.get(channel, "verb") {
+            Some(value) => value.as_str().unwrap_or(&self.auction.verb),
+            None => &self.auction.verb,
+        }
     }
 
     pub fn is_admin(&self, name: &str) -> bool {
