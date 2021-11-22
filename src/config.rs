@@ -176,7 +176,7 @@ impl Config {
     }
 
     pub const fn with_path(self, path: PathBuf) -> ConfigFile {
-        ConfigFile { config: self, path }
+        ConfigFile { data: self, path }
     }
 }
 
@@ -251,8 +251,8 @@ impl Config {
 
 #[derive(Clone)]
 pub struct ConfigFile {
-    pub config: Config,
-    pub path: PathBuf,
+    data: Config,
+    path: PathBuf,
 }
 
 
@@ -260,7 +260,7 @@ impl ConfigFile {
     pub fn reload(&mut self) -> Result<(), ConfigOpen> {
         match Config::open(&self.path) {
             ConfigOpen::FileValid(new) => {
-                self.config = new;
+                self.data = new;
                 Ok(())
             }
             err => Err(err),
@@ -273,13 +273,13 @@ impl Deref for ConfigFile {
     type Target = Config;
 
     fn deref(&self) -> &Self::Target {
-        &self.config
+        &self.data
     }
 }
 
 
 impl DerefMut for ConfigFile {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.config
+        &mut self.data
     }
 }

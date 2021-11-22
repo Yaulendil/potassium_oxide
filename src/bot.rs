@@ -2,7 +2,7 @@ mod auction;
 mod client;
 
 use auction::*;
-use client::Client;
+use client::{Client, Response};
 use crate::ConfigFile;
 use humantime::{format_duration, FormattedDuration};
 use parking_lot::Mutex;
@@ -135,7 +135,10 @@ impl Bot {
         match self.config.get_auth() {
             Ok(conf) => block_on(async move {
                 while crate::running() {
-                    info!("Bot closed: {:?}", self.run_once(&conf).await);
+                    match self.run_once(&conf).await {
+                        Ok(status) => info!("Bot closed: {:?}", status),
+                        Err(status) => warn!("Bot closed: {:?}", status),
+                    }
 
                     if crate::running() {
                         let delay: Duration = self.config.get_reconnect();
@@ -225,7 +228,9 @@ impl Bot {
         &mut self,
         msg: &Privmsg<'_>,
         words: &[&str],
-    ) -> Option<String> {
+    ) -> Option<Response> {
+        use Response::*;
+
         let author: &str = msg.display_name().unwrap_or_else(|| msg.name());
         let usr_op: bool = self.authenticate(msg);
 
@@ -237,7 +242,7 @@ impl Bot {
                     auction.remaining().unwrap_or_default(),
                 );
 
-                Some(match auction.get_bid() {
+                Some(Reply(match auction.get_bid() {
                     None => format!(
                         "The Auction still has {} remaining. The minimum bid \
                         is {}, but there have not been any bids yet.",
@@ -251,15 +256,18 @@ impl Bot {
                         bidder,
                         usd!(amount),
                     ),
-                })
+                }))
             }
             ["auction", subcom, args @ ..] if usr_op => match *subcom {
                 "start" => {
                     let mut lock = self.auction.lock();
 
                     if lock.is_some() {
-                        Some(format!("An Auction is already running; Invoke '{}\
-                        auction stop' to cancel it.", self.config.get_prefix()))
+                        Some(Reply(format!(
+                            "An Auction is already running; Invoke '{}auction \
+                            stop' to cancel it.",
+                            self.config.get_prefix(),
+                        )))
                     } else {
                         let channel = msg.channel().trim_start_matches('#');
                         let mut dur = self.config.get_duration(channel);
@@ -298,13 +306,13 @@ impl Bot {
                             dur, hlm, max, min,
                         ));
 
-                        Some(new.explain(self.config.get_prefix()))
+                        Some(Message(new.explain(self.config.get_prefix())))
                     }
                 }
-                "stop" => Some(match self.auction.lock().take() {
-                    Some(..) => "Auction stopped.".into(),
-                    None => "No Auction is currently running.".into(),
-                }),
+                "stop" => Some(Reply(match self.auction.lock().take() {
+                    Some(..) => "Auction stopped.",
+                    None => "No Auction is currently running.",
+                }.into())),
                 _ => None,
             }
             ["bid", arg, ..] => match substring_to_end(msg.data(), arg)
@@ -314,41 +322,39 @@ impl Bot {
                     .as_mut()?
                     .bid(&author, bid)
                 {
-                    BidResult::Ok => format!(
+                    BidResult::Ok => Message(format!(
                         "NEW BID: @{} has bid {}.",
                         author, usd!(bid),
+                    )),
+                    BidResult::RepeatBidder => Reply(
+                        "You are already the top bidder.".into()
                     ),
-                    BidResult::RepeatBidder => format!(
-                        "@{}: You are already the top bidder.",
-                        author,
-                    ),
-                    BidResult::AboveMaximum(max) => format!(
-                        "@{}: You can only raise by a maximum of {}.",
-                        author, usd!(max),
-                    ),
-                    BidResult::BelowMinimum(min) => format!(
-                        "@{}: The minimum bid is {}.",
-                        author, usd!(min),
-                    ),
-                    BidResult::DoesNotRaise(cur) => format!(
-                        "@{}: The current bid is {}.",
-                        author, usd!(cur),
-                    ),
+                    BidResult::AboveMaximum(max) => Reply(format!(
+                        "You can only raise by a maximum of {}.",
+                        usd!(max),
+                    )),
+                    BidResult::BelowMinimum(min) => Reply(format!(
+                        "The minimum bid is {}.",
+                        usd!(min),
+                    )),
+                    BidResult::DoesNotRaise(cur) => Reply(format!(
+                        "The current bid is {}.",
+                        usd!(cur),
+                    )),
                 }),
-                Err(..) => Some(format!(
-                    "@{}: A bid must be a whole number of USD.",
-                    author,
+                Err(..) => Some(Reply(
+                    "A bid must be a whole number of USD.".into()
                 )),
             }
             #[cfg(debug_assertions)]
-            ["echo", arg, ..] => Some(format!(
+            ["echo", arg, ..] => Some(Message(format!(
                 "{} said: {:?}",
                 author, substring_to_end(msg.data(), arg).unwrap_or(arg),
-            )),
-            ["reload", ..] => match self.config.reload() {
-                Ok(..) => Some("Configuration reloaded.".into()),
-                Err(_) => Some("Failed to reload Config.".into()),
-            },
+            ))),
+            ["reload", ..] => Some(Reply(match self.config.reload() {
+                Ok(..) => "Configuration reloaded.",
+                Err(_) => "Failed to reload Config.",
+            }.into())),
             _ => None,
         }
     }
@@ -358,13 +364,15 @@ impl Bot {
 
         match message {
             Privmsg(msg) if !self.should_ignore(&msg)
-            => if let Some(line) = msg.data().strip_prefix(self.config.get_prefix()) {
+            => if let Some(words) = self.find_command(msg.data()) {
                 chat!("({}) {}: {:?}", msg.channel(), msg.name(), msg.data());
 
-                let words: Vec<&str> = line.split_whitespace().collect();
-
                 if let Some(reply) = self.handle_command(&msg, &words).await {
-                    self.send(reply).await;
+                    if let Some(client) = &mut self.client {
+                        if let Err(err) = client.respond(&msg, reply).await {
+                            warn!("Failed to send message: {}", err);
+                        }
+                    }
                 }
             }
 
@@ -390,6 +398,13 @@ impl Bot {
             // Whisper(_) => {}
 
             _ => {}
+        }
+    }
+
+    fn find_command<'s>(&self, text: &'s str) -> Option<Vec<&'s str>> {
+        match text.strip_prefix(self.config.get_prefix()) {
+            Some(line) => Some(line.split_whitespace().collect()),
+            None => None,
         }
     }
 }
