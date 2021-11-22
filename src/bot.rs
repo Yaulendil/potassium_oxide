@@ -85,11 +85,18 @@ pub struct Bot {
     config: ConfigFile,
     client: Option<Client>,
     auction: Arc<Mutex<Option<Auction>>>,
+    stopped: Option<Instant>,
 }
 
 impl Bot {
     pub fn new(channel: String, config: ConfigFile) -> Self {
-        Self { channel, config, client: None, auction: Default::default() }
+        Self {
+            channel,
+            config,
+            client: None,
+            auction: Default::default(),
+            stopped: None,
+        }
     }
 
     fn authenticate(&self, msg: &Privmsg<'_>) -> bool {
@@ -100,12 +107,6 @@ impl Bot {
 
     fn should_ignore(&self, msg: &Privmsg<'_>) -> bool {
         self.config.is_blacklisted(msg.name())
-    }
-
-    pub async fn send(&self, msg: impl AsRef<str>) {
-        if let Some(mut client) = self.client.clone() {
-            client.send(msg).await.ok();
-        }
     }
 
     pub fn run(&mut self) -> Result<(), String> {
@@ -142,7 +143,40 @@ impl Bot {
         let mut runner = AsyncRunner::connect(connection, uconf).await?;
         info!("Connected.");
 
-        let client = Client::new(self.channel.clone(), &mut runner).await?;
+        let mut client = Client::new(self.channel.clone(), &mut runner).await?;
+
+        if let Some(stopped) = self.stopped.take() {
+            if let Some(mut lock) = self.auction.try_lock() {
+                if let Some(auction) = lock.as_mut() {
+                    let downtime = Instant::now() - stopped;
+
+                    auction.add_time(downtime);
+
+                    let status = match auction.get_bid() {
+                        Some(Bid { amount, bidder }) => format!(
+                            "The highest bidder is currently @{} at {}",
+                            bidder, usd!(amount),
+                        ),
+                        None => format!(
+                            "The minimum bid is {}",
+                            usd!(auction.get_minimum()),
+                        ),
+                    };
+
+                    let time = format_duration(match auction.remaining() {
+                        Some(time) => Duration::from_secs(time.as_secs() + 1),
+                        None => Duration::from_secs(0),
+                    });
+
+                    client.send(format!(
+                        "Sorry, it seems I lost connection for a moment. No \
+                        problem though, I can continue the Auction from where \
+                        it left off. {}, with {} remaining.",
+                        status, time,
+                    )).await?;
+                }
+            }
+        }
 
         let auction_loop = {
             let mut cli: Client = client.clone();
@@ -159,7 +193,7 @@ impl Bot {
 
                 let mut time = Instant::now();
 
-                while crate::running() {
+                while crate::running() && cli.is_running() {
                     if let Some(mut lock) = auction.try_lock_for(TO) {
                         if let Some(text) = auction_check(&mut lock) {
                             if let Err(e) = block_on(cli.send(text)) {
@@ -183,6 +217,7 @@ impl Bot {
         self.client = Some(client);
         let result = self.main_loop(runner).await;
         self.client = None;
+        self.stopped = Some(Instant::now());
 
         match auction_loop.join() {
             Err(_e) => Err(BotExit::ThreadPanic),
@@ -322,6 +357,11 @@ impl Bot {
                 Err(..) => Some(Reply(
                     "A bid must be a whole number of USD.".into()
                 )),
+            }
+            #[cfg(debug_assertions)]
+            ["die", ..] if usr_op => {
+                self.client.as_ref()?.clone().quit().await;
+                None
             }
             #[cfg(debug_assertions)]
             ["echo", arg, ..] => Some(Message(format!(

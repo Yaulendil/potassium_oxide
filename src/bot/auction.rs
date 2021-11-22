@@ -46,6 +46,10 @@ impl Auction {
         }
     }
 
+    pub fn add_time(&mut self, time: Duration) {
+        self.time_close += time;
+    }
+
     pub fn bid(
         &mut self,
         name_new: impl AsRef<str>,
@@ -85,7 +89,7 @@ impl Auction {
         let now = Instant::now();
 
         if (self.time_close - self.helmet) < now {
-            self.time_close += self.helmet;
+            self.add_time(self.helmet);
         }
     }
 
