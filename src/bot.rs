@@ -7,9 +7,10 @@ use crate::ConfigFile;
 use humantime::{format_duration, FormattedDuration};
 use parking_lot::Mutex;
 use smol::{block_on, Timer};
+use spin_sleep::sleep;
 use std::{
     sync::Arc,
-    thread::{Builder, current, sleep},
+    thread::{Builder, current},
     time::{Duration, Instant},
 };
 use twitchchat::{
