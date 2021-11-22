@@ -61,7 +61,7 @@ macro_rules! fatal {($($text:tt)+) => {$crate::_msg!(@eprintln FATAL FATAL: $($t
 #[macro_export]
 macro_rules! err {($($text:tt)+) => {$crate::_msg!(@eprintln ERR ERROR: $($text)+)}}
 #[macro_export]
-macro_rules! warn {($($text:tt)+) => {$crate::_msg!(@eprintln WARN WARNING: $($text)+)}}
+macro_rules! warn {($($text:tt)+) => {$crate::_msg!(@eprintln WARN WARN: $($text)+)}}
 #[macro_export]
 macro_rules! info {($($text:tt)+) => {$crate::_msg!(@eprintln DB INFO: $($text)+)}}
 #[macro_export]

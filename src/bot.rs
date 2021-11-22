@@ -1,9 +1,11 @@
 mod auction;
 mod client;
+mod exit;
 
 use auction::*;
 use client::{Client, Response};
 use crate::ConfigFile;
+pub use exit::BotExit;
 use humantime::{format_duration, FormattedDuration};
 use parking_lot::Mutex;
 use smol::{block_on, Timer};
@@ -17,7 +19,6 @@ use twitchchat::{
     connector::smol::Connector,
     messages::{Commands, Privmsg},
     runner::AsyncRunner,
-    RunnerError,
     Status,
     twitch::UserConfigError,
     UserConfig,
@@ -72,34 +73,9 @@ fn auction_check(lock: &mut Option<Auction>) -> Option<String> {
     }
 }
 
-
-#[derive(Debug)]
-pub enum BotExit {
-    ConnectionClosed,
-    BotExited,
-    ClientErr,
-    ConfigErr,
-
-    RunnerError(RunnerError),
-    IoError(std::io::Error),
-    ThreadPanic,
-}
-
-impl From<RunnerError> for BotExit {
-    fn from(e: RunnerError) -> Self {
-        Self::RunnerError(e)
-    }
-}
-
-impl From<std::io::Error> for BotExit {
-    fn from(e: std::io::Error) -> Self {
-        Self::IoError(e)
-    }
-}
-
 impl From<BotExit> for String {
     fn from(err: BotExit) -> Self {
-        format!("{:?}", err)
+        format!("{}", err)
     }
 }
 
@@ -137,8 +113,8 @@ impl Bot {
             Ok(conf) => block_on(async move {
                 while crate::running() {
                     match self.run_once(&conf).await {
-                        Ok(status) => info!("Bot closed: {:?}", status),
-                        Err(status) => warn!("Bot closed: {:?}", status),
+                        Ok(status) => info!("Bot closed: {}", status),
+                        Err(status) => warn!("Bot closed: {}", status),
                     }
 
                     if crate::running() {
