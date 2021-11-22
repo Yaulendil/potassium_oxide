@@ -29,11 +29,11 @@ struct Command {
 
 
 fn main() {
-    if let Err(..) = ctrlc::set_handler(|| {
+    if let Err(e) = ctrlc::set_handler(|| {
         eprintln!("Interrupted");
         stop();
     }) {
-        fatal!("Failed to set Interrupt Handler.");
+        fatal!("Failed to set Interrupt Handler: {}", e);
         exit(1);
     }
 
@@ -124,6 +124,7 @@ fn main() {
             }
             FileValid(config) => {
                 let mut threads = Vec::with_capacity(channels.len());
+                let config = config.with_path(path);
 
                 for channel in channels.into_iter() {
                     info!("Joining #{}...", &channel);
@@ -131,7 +132,7 @@ fn main() {
 
                     match Builder::new()
                         .name(format!("#{}", channel))
-                        .spawn(move || run_bot(channel, &cfg))
+                        .spawn(move || run_bot(channel, cfg))
                     {
                         Err(error) => warn!("Failed to spawn thread: {}", error),
                         Ok(thread) => threads.push(thread),

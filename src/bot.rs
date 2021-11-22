@@ -3,7 +3,7 @@ mod client;
 
 use auction::*;
 use client::Client;
-use crate::config::Config;
+use crate::ConfigFile;
 use humantime::{format_duration, FormattedDuration};
 use parking_lot::Mutex;
 use smol::{block_on, Timer};
@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 use twitchchat::{
-    connector,
+    connector::smol::Connector,
     messages::{Commands, Privmsg},
     runner::AsyncRunner,
     RunnerError,
@@ -103,15 +103,15 @@ impl From<BotExit> for String {
 }
 
 
-pub struct Bot<'b> {
+pub struct Bot {
     channel: String,
-    config: &'b Config,
+    config: ConfigFile,
     client: Option<Client>,
     auction: Arc<Mutex<Option<Auction>>>,
 }
 
-impl<'b> Bot<'b> {
-    pub fn new(channel: String, config: &'b Config) -> Self {
+impl Bot {
+    pub fn new(channel: String, config: ConfigFile) -> Self {
         Self { channel, config, client: None, auction: Default::default() }
     }
 
@@ -141,23 +141,24 @@ impl<'b> Bot<'b> {
                         let delay: Duration = self.config.get_reconnect();
                         info!("Reconnecting in {}s.\n", delay.as_secs());
                         Timer::after(delay).await;
+                        self.config.reload().ok();
                     }
                 }
 
                 Ok(())
             }),
-            Err(err) => Err(String::from(match err {
+            Err(err) => Err(match err {
                 UserConfigError::InvalidName => "Invalid Username",
                 UserConfigError::InvalidToken => "Invalid OAuth Token",
                 UserConfigError::PartialAnonymous => "Partial Anonymous login",
                 _ => "Unknown error",
-            })),
+            }.into()),
         }
     }
 
     async fn run_once(&mut self, uconf: &UserConfig) -> Result<BotExit, BotExit> {
         info!("Connecting...");
-        let connection = connector::smol::Connector::twitch()?;
+        let connection = Connector::twitch()?;
         let mut runner = AsyncRunner::connect(connection, uconf).await?;
         info!("Connected.");
 
@@ -344,6 +345,10 @@ impl<'b> Bot<'b> {
                 "{} said: {:?}",
                 author, substring_to_end(msg.data(), arg).unwrap_or(arg),
             )),
+            ["reload", ..] => match self.config.reload() {
+                Ok(..) => Some("Configuration reloaded.".into()),
+                Err(_) => Some("Failed to reload Config.".into()),
+            },
             _ => None,
         }
     }
@@ -351,16 +356,16 @@ impl<'b> Bot<'b> {
     async fn handle_message(&mut self, message: Commands<'_>) {
         use Commands::*;
 
-        if let Some(reply) = match message {
+        match message {
             Privmsg(msg) if !self.should_ignore(&msg)
             => if let Some(line) = msg.data().strip_prefix(self.config.get_prefix()) {
                 chat!("({}) {}: {:?}", msg.channel(), msg.name(), msg.data());
 
                 let words: Vec<&str> = line.split_whitespace().collect();
 
-                self.handle_command(&msg, &words).await
-            } else {
-                None
+                if let Some(reply) = self.handle_command(&msg, &words).await {
+                    self.send(reply).await;
+                }
             }
 
             // Raw(_) => {}
@@ -384,9 +389,7 @@ impl<'b> Bot<'b> {
             // UserState(_) => {}
             // Whisper(_) => {}
 
-            _ => None
-        } {
-            self.send(reply).await;
+            _ => {}
         }
     }
 }

@@ -1,10 +1,11 @@
 use directories::ProjectDirs;
 use std::{
     fs::{create_dir, File, rename},
-    io::{Error as ErrorIo, Read, Write},
+    io::{Error as ErrorIo, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     time::Duration,
 };
+use std::ops::{Deref, DerefMut};
 use toml::{de::Error as ErrorToml, map::Map, Value};
 use twitchchat::twitch::{UserConfig, UserConfigError};
 
@@ -15,7 +16,6 @@ macro_rules! filename {($name:expr) => {concat!($name, ".toml")}}
 /// Contents of the default configuration file.
 const CONFIG_DEFAULT: &str = include_str!(filename!("cfg_default"));
 const CONFIG_PATH: &str = filename!("cfg");
-const CONFIG_SIZE: usize = 2048;
 
 
 fn contains<I, T, U>(sequence: I, want: U) -> bool where
@@ -78,14 +78,14 @@ pub enum ConfigOpen {
 }
 
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct ConfigAuth {
     username: String,
     oauth: String,
 }
 
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct ConfigAdmin {
     admins: Vec<String>,
     blacklist: Vec<String>,
@@ -95,7 +95,7 @@ pub struct ConfigAdmin {
 }
 
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct ConfigAuction {
     duration: u64,
     helmet: u64,
@@ -105,7 +105,7 @@ pub struct ConfigAuction {
 }
 
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Config {
     auth: ConfigAuth,
     admin: ConfigAdmin,
@@ -117,15 +117,15 @@ pub struct Config {
 
 impl Config {
     pub fn create(path: &Path, create_parent: bool) -> Result<(), ErrorIo> {
-        if let Some(parent) = path.parent() {
-            if create_parent && !parent.exists() {
-                create_dir(parent)?;
-            }
-        }
-
         if path.exists() {
             if let Some(backup) = get_backup(path) {
                 rename(path, backup).ok();
+            }
+        } else if create_parent {
+            if let Some(parent) = path.parent() {
+                if !parent.exists() {
+                    create_dir(parent)?;
+                }
             }
         }
 
@@ -148,12 +148,23 @@ impl Config {
     pub fn open(path: &Path) -> ConfigOpen {
         use ConfigOpen::*;
 
-        let mut data = String::with_capacity(CONFIG_SIZE);
-        if let Err(e) = File::open(&path).and_then(|mut file: File| {
-            file.read_to_string(&mut data)
-        }) {
-            return FileInaccessible(e);
-        }
+        let data = match File::open(&path) {
+            Ok(mut file) => match file.seek(SeekFrom::End(0)) {
+                Ok(len) => match file.rewind() {
+                    Ok(..) => {
+                        let mut buf = String::with_capacity(1 + len as usize);
+
+                        match file.read_to_string(&mut buf) {
+                            Ok(..) => buf,
+                            Err(e) => { return FileInaccessible(e); }
+                        }
+                    }
+                    Err(e) => { return FileInaccessible(e); }
+                }
+                Err(e) => { return FileInaccessible(e); }
+            }
+            Err(e) => { return FileInaccessible(e); }
+        };
 
         match toml::from_str::<Config>(&data) {
             Err(e) => FileInvalid(e),
@@ -162,6 +173,10 @@ impl Config {
                 FileValid(config)
             }
         }
+    }
+
+    pub const fn with_path(self, path: PathBuf) -> ConfigFile {
+        ConfigFile { config: self, path }
     }
 }
 
@@ -230,5 +245,41 @@ impl Config {
     pub fn lower(&mut self) {
         lower(&mut self.admin.admins);
         lower(&mut self.admin.blacklist);
+    }
+}
+
+
+#[derive(Clone)]
+pub struct ConfigFile {
+    pub config: Config,
+    pub path: PathBuf,
+}
+
+
+impl ConfigFile {
+    pub fn reload(&mut self) -> Result<(), ConfigOpen> {
+        match Config::open(&self.path) {
+            ConfigOpen::FileValid(new) => {
+                self.config = new;
+                Ok(())
+            }
+            err => Err(err),
+        }
+    }
+}
+
+
+impl Deref for ConfigFile {
+    type Target = Config;
+
+    fn deref(&self) -> &Self::Target {
+        &self.config
+    }
+}
+
+
+impl DerefMut for ConfigFile {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.config
     }
 }

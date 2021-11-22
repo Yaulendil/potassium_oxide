@@ -8,7 +8,7 @@ pub mod bot;
 pub mod config;
 
 pub use bot::{Bot, BotExit};
-pub use config::Config;
+pub use config::{Config, ConfigFile};
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 
 
@@ -25,8 +25,8 @@ pub fn running() -> bool { !STOP.load(SeqCst) }
 pub fn stop() { STOP.store(true, SeqCst); }
 
 
-pub fn run_bot(channel: String, config: &Config) {
-    match Bot::new(channel, &config).run() {
+pub fn run_bot(channel: String, config: ConfigFile) {
+    match Bot::new(channel, config).run() {
         Err(failed) => err!("Failed to run bot: {}", failed),
         Ok(..) => info!("Complete."),
     }
