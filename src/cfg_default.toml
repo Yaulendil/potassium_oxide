@@ -37,6 +37,12 @@ admins = []
 # Commands invoked by any username in this list will not be processed.
 blacklist = []
 
+# With this enabled, Command invocations will be parsed more carefully, allowing
+#   arguments to include spaces by enclosing them in quotation marks. Also, a
+#   semicolon will be treated as the end of the command, allowing a user to add
+#   trailing text to a message without it being interpreted as Command input.
+parse_commands = true
+
 # Prefix for commands. Any message that begins with this string will be taken as
 #   a command invocation.
 prefix = "+"

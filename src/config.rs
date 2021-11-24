@@ -90,6 +90,7 @@ pub struct ConfigAdmin {
     admins: Vec<String>,
     blacklist: Vec<String>,
 
+    parse_commands: bool,
     prefix: String,
     reconnect: u64,
 }
@@ -223,6 +224,10 @@ impl Config {
             Some(value) => value.try_into().unwrap_or(self.auction.min_bid),
             None => self.auction.min_bid,
         }
+    }
+
+    pub const fn get_parse_commands(&self) -> bool {
+        self.admin.parse_commands
     }
 
     pub fn get_prefix(&self) -> &str {

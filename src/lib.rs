@@ -7,10 +7,9 @@ mod macros;
 pub mod bot;
 pub mod config;
 
-pub use bot::Bot;
+pub use bot::{Bot, BotExit};
 pub use config::{Config, ConfigFile};
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
-pub use bot::BotExit;
 
 
 static STOP: AtomicBool = AtomicBool::new(false);

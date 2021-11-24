@@ -1,6 +1,7 @@
 mod auction;
 mod client;
 mod exit;
+mod util;
 
 use auction::*;
 use client::{Client, Response};
@@ -23,6 +24,7 @@ use twitchchat::{
     twitch::UserConfigError,
     UserConfig,
 };
+pub use util::{split_cmd, unquote};
 
 
 fn substring_to_end<'a>(main: &'a str, sub: &str) -> Option<&'a str> {
@@ -75,7 +77,7 @@ fn auction_check(lock: &mut Option<Auction>) -> Option<String> {
 
 impl From<BotExit> for String {
     fn from(err: BotExit) -> Self {
-        format!("{}", err)
+        err.to_string()
     }
 }
 
@@ -239,6 +241,7 @@ impl Bot {
     async fn handle_command(
         &mut self,
         msg: &Privmsg<'_>,
+        line: &str,
         words: &[&str],
     ) -> Option<Response> {
         use Response::*;
@@ -286,6 +289,7 @@ impl Bot {
                         let mut hlm = self.config.get_helmet(channel);
                         let mut max = self.config.get_max_raise(channel);
                         let mut min = self.config.get_min_bid(channel);
+                        let mut vrb = self.config.get_verb(channel);
                         let mut tok = args.iter();
 
                         while let Some(flag) = tok.next() {
@@ -310,6 +314,9 @@ impl Bot {
                                         min = vl;
                                     }
                                 }
+                                "-v" => if let Some(val) = tok.next() {
+                                    vrb = val;
+                                }
                                 _ => {}
                             }
                         }
@@ -319,8 +326,7 @@ impl Bot {
                         ));
 
                         Some(Message(new.explain(
-                            &self.config.get_prefix(),
-                            &self.config.get_verb(channel),
+                            self.config.get_prefix(), &vrb,
                         )))
                     }
                 }
@@ -361,17 +367,17 @@ impl Bot {
                     "A bid must be a whole number of USD.".into()
                 )),
             }
-            #[cfg(debug_assertions)]
+            // #[cfg(debug_assertions)]
             ["die", ..] if usr_op => {
                 self.client.as_ref()?.clone().quit().await;
                 None
             }
-            #[cfg(debug_assertions)]
-            ["echo", arg, ..] => Some(Message(format!(
+            // #[cfg(debug_assertions)]
+            ["echo", arg, ..] if usr_op => Some(Message(format!(
                 "{} said: {:?}",
-                author, substring_to_end(msg.data(), arg).unwrap_or(arg),
+                author, substring_to_end(line, arg).unwrap_or(arg),
             ))),
-            ["reload", ..] => Some(Reply(match self.config.reload() {
+            ["reload", ..] if usr_op => Some(Reply(match self.config.reload() {
                 Ok(..) => "Configuration reloaded.",
                 Err(_) => "Failed to reload Config.",
             }.into())),
@@ -384,10 +390,10 @@ impl Bot {
 
         match message {
             Privmsg(msg) if !self.should_ignore(&msg)
-            => if let Some(words) = self.find_command(msg.data()) {
+            => if let Some((line, words)) = self.find_command(msg.data()) {
                 chat!("({}) {}: {:?}", msg.channel(), msg.name(), msg.data());
 
-                if let Some(reply) = self.handle_command(&msg, &words).await {
+                if let Some(reply) = self.handle_command(&msg, line, &words).await {
                     if let Some(client) = &mut self.client {
                         if let Err(err) = client.respond(&msg, reply).await {
                             warn!("Failed to send message: {}", err);
@@ -421,9 +427,13 @@ impl Bot {
         }
     }
 
-    fn find_command<'s>(&self, text: &'s str) -> Option<Vec<&'s str>> {
+    pub fn find_command<'s>(&self, text: &'s str) -> Option<(&'s str, Vec<&'s str>)> {
         match text.strip_prefix(self.config.get_prefix()) {
-            Some(line) => Some(line.split_whitespace().collect()),
+            Some(line) => if self.config.get_parse_commands() {
+                Some(split_cmd(line))
+            } else {
+                Some((line, line.split_whitespace().collect()))
+            }
             None => None,
         }
     }
