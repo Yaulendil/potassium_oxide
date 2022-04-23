@@ -100,6 +100,7 @@ fn auction_check(lock: &mut Option<Auction>) -> AuctionStatus {
                     ),
                 };
 
+                info!("Auction finished.");
                 Ended(out, lock.take().unwrap())
             }
         }
@@ -377,8 +378,11 @@ impl Bot {
                             }
                         }
 
+                        info!("Auction in #{} started by {}.", channel, author);
                         let new: &mut Auction = lock.insert(Auction::new(
-                            dur, hlm, max, min, prz.map(|s| String::from(unquote(s))),
+                            dur, hlm, max, min, prz.map(|s| String::from(
+                                unquote(s),
+                            )),
                         ));
 
                         Some(Message(new.explain(
@@ -426,8 +430,9 @@ impl Bot {
                 ))),
                 _ => None,
             }
-            // #[cfg(debug_assertions)]
+            #[cfg(debug_assertions)]
             ["die", ..] if usr_op => {
+                info!("Bot killed by {}.", author);
                 self.client.as_ref()?.clone().quit().await;
                 None
             }

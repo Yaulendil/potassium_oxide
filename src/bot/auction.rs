@@ -67,20 +67,25 @@ impl Auction {
         name_new: impl AsRef<str>,
         bid_new: usize,
     ) -> BidResult {
+        let name_new = name_new.as_ref();
+
         let first: bool = if let Some(Bid {
             amount: bid_current,
             bidder: name_current,
             ..
         }) = self.last_bid() {
-            if name_new.as_ref().eq_ignore_ascii_case(name_current) {
+            if name_new.eq_ignore_ascii_case(name_current) {
+                info!("Bid by {} refused (repeat).", name_new);
                 return BidResult::RepeatBidder;
             }
 
             if bid_new <= *bid_current {
+                info!("Bid by {} refused (too low).", name_new);
                 return BidResult::DoesNotRaise(*bid_current);
             }
 
             if self.max_raise < bid_new.saturating_sub(*bid_current) {
+                info!("Bid by {} refused (too high).", name_new);
                 return BidResult::AboveMaximum(self.max_raise);
             }
 
@@ -90,11 +95,13 @@ impl Auction {
         };
 
         if bid_new < self.min_bid {
+            info!("Bid by {} refused (too low).", name_new);
             BidResult::BelowMinimum(self.min_bid)
         } else {
+            info!("New bid: {} by {}.", usd!(bid_new), name_new);
             self.bids.push(Bid {
                 amount: bid_new,
-                bidder: name_new.as_ref().to_string(),
+                bidder: name_new.to_string(),
                 #[cfg(feature = "chrono")]
                 time: chrono::Utc::now().round_subsecs(3),
             });
