@@ -112,7 +112,7 @@ impl Bot {
     }
 
     pub fn run(&mut self) -> Result<(), String> {
-        match self.config.get_auth() {
+        match self.config.auth() {
             Ok(conf) => block_on(async move {
                 while crate::running() {
                     match self.run_once(&conf).await {
@@ -121,7 +121,7 @@ impl Bot {
                     }
 
                     if crate::running() {
-                        let delay: Duration = self.config.get_reconnect();
+                        let delay: Duration = self.config.reconnect();
                         info!("Reconnecting in {}s.\n", delay.as_secs());
                         Timer::after(delay).await;
                         self.config.reload().ok();
@@ -281,15 +281,15 @@ impl Bot {
                         Some(Reply(format!(
                             "An Auction is already running; Invoke '{}auction \
                             stop' to cancel it.",
-                            self.config.get_prefix(),
+                            self.config.prefix(),
                         )))
                     } else {
                         let channel = msg.channel().trim_start_matches('#');
-                        let mut dur = self.config.get_duration(channel);
-                        let mut hlm = self.config.get_helmet(channel);
-                        let mut max = self.config.get_max_raise(channel);
-                        let mut min = self.config.get_min_bid(channel);
-                        let mut vrb = self.config.get_verb(channel);
+                        let mut dur = self.config.duration(channel);
+                        let mut hlm = self.config.helmet(channel);
+                        let mut max = self.config.max_raise(channel);
+                        let mut min = self.config.min_bid(channel);
+                        let mut vrb = self.config.verb(channel);
                         let mut tok = args.iter();
 
                         while let Some(flag) = tok.next() {
@@ -326,7 +326,7 @@ impl Bot {
                         ));
 
                         Some(Message(new.explain(
-                            self.config.get_prefix(), &vrb,
+                            self.config.prefix(), &vrb,
                         )))
                     }
                 }
@@ -429,8 +429,8 @@ impl Bot {
     }
 
     pub fn find_command<'s>(&self, text: &'s str) -> Option<(&'s str, Vec<&'s str>)> {
-        match text.strip_prefix(self.config.get_prefix()) {
-            Some(line) => if self.config.get_parse_commands() {
+        match text.strip_prefix(self.config.prefix()) {
+            Some(line) => if self.config.parse_commands() {
                 Some(split_cmd(line))
             } else {
                 Some((line, line.split_whitespace().collect()))

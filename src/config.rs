@@ -205,7 +205,7 @@ impl Config {
         self.channels.as_ref()?.get(channel)
     }
 
-    pub fn get_auth(&self) -> Result<UserConfig, UserConfigError> {
+    pub fn auth(&self) -> Result<UserConfig, UserConfigError> {
         UserConfig::builder()
             .name(&self.auth.username)
             .token(&self.auth.oauth)
@@ -213,53 +213,57 @@ impl Config {
             .build()
     }
 
-    pub fn get_duration(&self, channel: &str) -> Duration {
+    pub fn duration(&self, channel: &str) -> Duration {
         Duration::from_secs(match self.config_channel(channel) {
             Some(ConfigChannel { duration: Some(value), .. }) => *value,
             _ => self.auction.duration,
         })
     }
 
-    pub fn get_helmet(&self, channel: &str) -> Duration {
+    pub fn helmet(&self, channel: &str) -> Duration {
         Duration::from_secs(match self.config_channel(channel) {
             Some(ConfigChannel { helmet: Some(value), .. }) => *value,
             _ => self.auction.helmet,
         })
     }
 
-    pub fn get_max_raise(&self, channel: &str) -> usize {
+    pub fn max_raise(&self, channel: &str) -> usize {
         match self.config_channel(channel) {
             Some(ConfigChannel { max_raise: Some(value), .. }) => *value,
             _ => self.auction.max_raise,
         }
     }
 
-    pub fn get_min_bid(&self, channel: &str) -> usize {
+    pub fn min_bid(&self, channel: &str) -> usize {
         match self.config_channel(channel) {
             Some(ConfigChannel { min_bid: Some(value), .. }) => *value,
             _ => self.auction.min_bid,
         }
     }
 
-    pub const fn get_parse_commands(&self) -> bool {
+    pub const fn parse_commands(&self) -> bool {
         self.admin.parse_commands
     }
 
-    pub const fn get_prefix(&self) -> &String {
+    pub const fn prefix(&self) -> &String {
         &self.admin.prefix
     }
 
-    pub const fn get_reconnect(&self) -> Duration {
+    pub const fn reconnect(&self) -> Duration {
         Duration::from_secs(self.admin.reconnect)
     }
 
-    pub fn get_verb(&self, channel: &str) -> &str {
+    pub fn verb(&self, channel: &str) -> &str {
         match self.config_channel(channel) {
             Some(ConfigChannel { verb: Some(value), .. }) => value,
             _ => &self.auction.verb,
         }
     }
+}
 
+
+/// Methods for testing specific configured conditions.
+impl Config {
     pub fn is_admin(&self, name: &str, channel: &str) -> bool {
         if self.is_globally_admin(name) {
             true
