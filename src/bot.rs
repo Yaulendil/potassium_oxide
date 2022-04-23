@@ -322,6 +322,22 @@ impl Bot {
                 }))
             }
             ["auction", subcom, args @ ..] if usr_op => match *subcom {
+                "prize" => {
+                    let mut guard = self.auction.lock();
+                    let auction = guard.as_mut()?;
+
+                    auction.prize = match args {
+                        [] => None,
+                        [one] => Some(unquote(one).to_owned()),
+                        [first, ..] => substring_to_end(line, first)
+                            .map(|s| s.to_string()),
+                    };
+
+                    Some(Reply(match &auction.prize {
+                        Some(s) => format!("The current Auction is for {}.", s),
+                        None => format!("The Auction prize has been unset."),
+                    }))
+                }
                 "start" => {
                     let mut lock = self.auction.lock();
 
