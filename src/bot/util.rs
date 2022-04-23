@@ -74,3 +74,16 @@ pub fn split_cmd(line: &str) -> (&str, Vec<&str>) {
     push!();
     (&line[..index], words)
 }
+
+
+pub fn substring_to_end<'a>(main: &'a str, sub: &str) -> Option<&'a str> {
+    let valid = main.as_bytes().as_ptr_range();
+
+    if !sub.is_empty() && valid.contains(&sub.as_ptr()) {
+        let idx = unsafe { sub.as_ptr().offset_from(valid.start) } as usize;
+
+        Some(&main[idx..])
+    } else {
+        None
+    }
+}

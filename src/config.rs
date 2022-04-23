@@ -1,13 +1,12 @@
-use directories::ProjectDirs;
 use std::{
     collections::HashMap,
     fs::{create_dir, File, rename},
-    io::{Error as ErrorIo, Read, Seek, SeekFrom, Write},
+    io::{Read, Seek, SeekFrom, Write},
+    ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     time::Duration,
 };
-use std::ops::{Deref, DerefMut};
-use toml::de::Error as ErrorToml;
+use directories::ProjectDirs;
 use twitchchat::twitch::{UserConfig, UserConfigError};
 
 
@@ -69,8 +68,8 @@ impl ConfigFind {
 
 
 pub enum ConfigOpen {
-    FileInaccessible(ErrorIo),
-    FileInvalid(ErrorToml),
+    FileInaccessible(std::io::Error),
+    FileInvalid(toml::de::Error),
     FileValid(Config),
 }
 
@@ -136,7 +135,7 @@ pub struct Config {
 
 
 impl Config {
-    pub fn create(path: &Path, create_parent: bool) -> Result<(), ErrorIo> {
+    pub fn create(path: &Path, create_parent: bool) -> Result<(), std::io::Error> {
         if path.exists() {
             if let Some(backup) = get_backup(path) {
                 rename(path, backup).ok();

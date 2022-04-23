@@ -1,5 +1,4 @@
-use std::fmt::{Display, Formatter, self};
-use twitchchat::runner::Error as RunnerError;
+use std::fmt::{Display, Formatter};
 
 
 pub enum BotExit {
@@ -7,12 +6,12 @@ pub enum BotExit {
     ConnectionClosed,
     ThreadPanic,
 
-    RunnerError(RunnerError),
+    RunnerError(twitchchat::runner::Error),
     IoError(std::io::Error),
 }
 
-impl From<RunnerError> for BotExit {
-    fn from(e: RunnerError) -> Self {
+impl From<twitchchat::runner::Error> for BotExit {
+    fn from(e: twitchchat::runner::Error) -> Self {
         Self::RunnerError(e)
     }
 }
@@ -23,9 +22,14 @@ impl From<std::io::Error> for BotExit {
     }
 }
 
+impl From<BotExit> for String {
+    fn from(err: BotExit) -> Self {
+        err.to_string()
+    }
+}
 
 impl Display for BotExit {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             BotExit::BotExited => f.write_str("Exited."),
             BotExit::ConnectionClosed => f.write_str("Connection closed."),

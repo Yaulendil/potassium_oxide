@@ -3,19 +3,11 @@ mod client;
 mod exit;
 mod util;
 
-use auction::*;
-use client::{Client, Response};
-use crate::ConfigFile;
-pub use exit::BotExit;
+use std::{sync::Arc, thread::{Builder, current}, time::{Duration, Instant}};
 use humantime::{format_duration, FormattedDuration};
 use parking_lot::Mutex;
 use smol::{block_on, Timer};
 use spin_sleep::sleep;
-use std::{
-    sync::Arc,
-    thread::{Builder, current},
-    time::{Duration, Instant},
-};
 use twitchchat::{
     connector::smol::Connector,
     messages::{Commands, Privmsg},
@@ -24,7 +16,11 @@ use twitchchat::{
     twitch::UserConfigError,
     UserConfig,
 };
-pub use util::{split_cmd, unquote};
+use crate::ConfigFile;
+use auction::{Auction, Bid, BidResult};
+use client::{Client, Response};
+pub use exit::BotExit;
+pub use util::{split_cmd, substring_to_end, unquote};
 
 
 /// Define the values of remaining time at which an update on the auction should
@@ -41,19 +37,6 @@ macro_rules! announce_time {
         //  Beyond this, people should just use the status command. This may
         //      already be too far.
     ))};
-}
-
-
-fn substring_to_end<'a>(main: &'a str, sub: &str) -> Option<&'a str> {
-    let valid = main.as_bytes().as_ptr_range();
-
-    if !sub.is_empty() && valid.contains(&sub.as_ptr()) {
-        let idx = unsafe { sub.as_ptr().offset_from(valid.start) } as usize;
-
-        Some(&main[idx..])
-    } else {
-        None
-    }
 }
 
 
@@ -105,12 +88,6 @@ fn auction_check(lock: &mut Option<Auction>) -> AuctionStatus {
             }
         }
         None => Inactive,
-    }
-}
-
-impl From<BotExit> for String {
-    fn from(err: BotExit) -> Self {
-        err.to_string()
     }
 }
 

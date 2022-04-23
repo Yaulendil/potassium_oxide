@@ -1,6 +1,11 @@
-use argh::{from_env, FromArgs};
-use k2o::{*, config::{ConfigFind::*, ConfigOpen::{*, self}}};
 use std::{path::PathBuf, process::exit, thread::Builder};
+use argh::{from_env, FromArgs};
+use k2o::{
+    {err, fatal, info, warn},
+    config::{Config, ConfigFind, ConfigOpen},
+    run_bot,
+    stop,
+};
 
 
 /// Run an Auction bot in Twitch chat via the IRC Bridge.
@@ -41,23 +46,23 @@ fn main() {
 
     if check_cfg {
         exit(match Config::find(cfg_path) {
-            DoesNotExist(path) => {
+            ConfigFind::DoesNotExist(path) => {
                 println!("Config file at {} does not exist.", path.display());
                 1
             }
-            Exists(path, FileInaccessible(e)) => {
+            ConfigFind::Exists(path, ConfigOpen::FileInaccessible(e)) => {
                 println!("Config file at {} inaccessible: {}", path.display(), e);
                 1
             }
-            Exists(path, FileInvalid(e)) => {
+            ConfigFind::Exists(path, ConfigOpen::FileInvalid(e)) => {
                 println!("Config file at {} invalid: {}", path.display(), e);
                 1
             }
-            Exists(path, FileValid(..)) => {
+            ConfigFind::Exists(path, ConfigOpen::FileValid(..)) => {
                 println!("Valid Config file found: {}", path.display());
                 0
             }
-            NoPath => {
+            ConfigFind::NoPath => {
                 println!("Cannot find Config filepath.");
                 1
             }
@@ -89,11 +94,11 @@ fn main() {
         }
 
         let (path, open): (PathBuf, ConfigOpen) = match Config::find(cfg_path) {
-            Exists(path, open) => {
+            ConfigFind::Exists(path, open) => {
                 info!("Using existing Config file: {}", path.display());
                 (path, open)
             }
-            DoesNotExist(path) => match Config::create(&path, true) {
+            ConfigFind::DoesNotExist(path) => match Config::create(&path, true) {
                 Ok(..) => {
                     info!("Default Config file created: {}", path.display());
                     let open = Config::open(&path);
@@ -106,23 +111,23 @@ fn main() {
                     );
                     exit(1);
                 }
-            },
-            NoPath => {
+            }
+            ConfigFind::NoPath => {
                 err!("Cannot find Config file path.");
                 exit(1);
             }
         };
 
         match open {
-            FileInaccessible(e) => {
+            ConfigOpen::FileInaccessible(e) => {
                 err!("Config file at {} inaccessible: {}", path.display(), e);
                 exit(1);
             }
-            FileInvalid(e) => {
+            ConfigOpen::FileInvalid(e) => {
                 err!("Config file at {} invalid: {}", path.display(), e);
                 exit(1);
             }
-            FileValid(config) => {
+            ConfigOpen::FileValid(config) => {
                 let mut threads = Vec::with_capacity(channels.len());
                 let config = config.with_path(path);
 
