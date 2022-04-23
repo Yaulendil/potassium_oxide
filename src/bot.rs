@@ -412,7 +412,7 @@ impl Bot {
                 }.into())),
                 _ => None,
             }
-            ["bid", arg, ..] => match substring_to_end(msg.data(), arg)
+            ["bid", arg, ..] => match substring_to_end(line, arg)
                 .unwrap_or(arg).trim_start_matches('$').parse::<usize>()
             {
                 Ok(bid) => Some(match self.auction.lock()
