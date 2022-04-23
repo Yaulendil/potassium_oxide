@@ -105,6 +105,7 @@ impl Auction {
 
     pub fn remaining(&self) -> Option<Duration> {
         self.time_close.checked_duration_since(Instant::now())
+            .map(|d| Duration::new(d.as_secs(), 0))
     }
 }
 
