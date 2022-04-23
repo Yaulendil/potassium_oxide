@@ -424,9 +424,10 @@ impl Bot {
                         if first { "FIRST" } else { "NEW" },
                         author, usd!(bid),
                     )),
-                    BidResult::RepeatBidder => Reply(
-                        "You are already the top bidder.".into()
-                    ),
+                    BidResult::RepeatBidder(bid) => Reply(format!(
+                        "You are already the top bidder at {}.",
+                        usd!(bid),
+                    )),
                     BidResult::AboveMaximum(max) => Reply(format!(
                         "You can only raise by a maximum of {}.",
                         usd!(max),

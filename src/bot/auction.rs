@@ -25,7 +25,7 @@ pub struct Winner {
 
 pub enum BidResult {
     Ok { first: bool },
-    RepeatBidder,
+    RepeatBidder(usize),
     AboveMaximum(usize),
     BelowMinimum(usize),
     DoesNotRaise(usize),
@@ -85,7 +85,7 @@ impl Auction {
         }) = self.last_bid() {
             if name_new.eq_ignore_ascii_case(name_current) {
                 info!("Bid by {} refused (repeat).", name_new);
-                return BidResult::RepeatBidder;
+                return BidResult::RepeatBidder(*bid_current);
             }
 
             if bid_new <= *bid_current {
