@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 #[cfg(feature = "chrono")]
-use chrono::SubsecRound;
+use chrono::{DateTime, SubsecRound, Utc};
 use crate::AuctionFinished;
 
 
@@ -10,7 +10,7 @@ pub struct Bid {
     pub amount: usize,
     pub bidder: String,
     #[cfg(feature = "chrono")]
-    pub time: chrono::DateTime<chrono::Utc>,
+    pub time: DateTime<Utc>,
 }
 
 
@@ -112,7 +112,7 @@ impl Auction {
                 amount: bid_new,
                 bidder: name_new.to_string(),
                 #[cfg(feature = "chrono")]
-                time: chrono::Utc::now().round_subsecs(3),
+                time: Utc::now().round_subsecs(3),
             });
 
             self.deflect_sniper();
