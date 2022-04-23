@@ -364,9 +364,11 @@ impl Bot {
                         usd!(cur),
                     )),
                 }),
-                Err(..) => Some(Reply(
-                    "A bid must be a whole number of USD.".into()
-                )),
+                Err(..) if self.auction.lock().is_some() => Some(Reply(format!(
+                    "A bid must be a positive whole number of {}.",
+                    usd!(),
+                ))),
+                _ => None,
             }
             // #[cfg(debug_assertions)]
             ["die", ..] if usr_op => {
