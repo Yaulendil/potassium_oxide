@@ -2,15 +2,13 @@ use std::io::Write;
 #[cfg(feature = "chrono")]
 use chrono::{DateTime, Duration, SecondsFormat, SubsecRound, Utc};
 use directories::ProjectDirs;
-use crate::bot::auction::{Auction, Bid};
+use crate::bot::auction::{Auction, Bid, Winner};
 
 
 #[derive(Deserialize, Serialize)]
 // #[serde(rename_all = "PascalCase")]
 pub struct AuctionFinished {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub prize: Option<String>,
-
     pub minimum_bid: usize,
     pub raise_limit: usize,
     pub duration: u64,
@@ -21,6 +19,8 @@ pub struct AuctionFinished {
     #[cfg(feature = "chrono")]
     pub closed: DateTime<Utc>,
 
+    #[serde(rename = "WINNER")]
+    pub winner: Option<Winner>,
     #[serde(rename = "BID", skip_serializing_if = "Vec::is_empty")]
     pub bids: Vec<Bid>,
 }
@@ -61,14 +61,23 @@ impl AuctionFinished {
 
 impl From<Auction> for AuctionFinished {
     fn from(auction: Auction) -> Self {
+        let winner = auction.winner();
+        #[allow(unused_variables)]
+        let Auction {
+            bids, prize,
+            duration, helmet,
+            max_raise, min_bid,
+            time_begin, time_close,
+        } = auction;
+
         #[cfg(feature = "chrono")]
         let (opened, closed) = {
             let now = std::time::Instant::now();
-            let now_utc = Utc::now();
+            let now_utc: DateTime<Utc> = Utc::now();
 
-            let since_begin = Duration::from_std(now - auction.time_begin)
+            let since_begin = Duration::from_std(now - time_begin)
                 .unwrap_or_else(|_| Duration::zero());
-            let since_close = Duration::from_std(now - auction.time_close)
+            let since_close = Duration::from_std(now - time_close)
                 .unwrap_or_else(|_| Duration::zero());
 
             let opened = (now_utc - since_begin).round_subsecs(0);
@@ -78,18 +87,19 @@ impl From<Auction> for AuctionFinished {
         };
 
         Self {
-            bids: auction.bids,
-
-            prize: auction.prize,
-            minimum_bid: auction.min_bid,
-            raise_limit: auction.max_raise,
-            duration: auction.duration.as_secs(),
-            helmet: auction.helmet.as_secs(),
+            prize,
+            minimum_bid: min_bid,
+            raise_limit: max_raise,
+            duration: duration.as_secs(),
+            helmet: helmet.as_secs(),
 
             #[cfg(feature = "chrono")]
             opened,
             #[cfg(feature = "chrono")]
             closed,
+
+            winner,
+            bids,
         }
     }
 }

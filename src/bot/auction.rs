@@ -14,6 +14,15 @@ pub struct Bid {
 }
 
 
+#[derive(Deserialize, Serialize)]
+// #[serde(rename_all = "PascalCase")]
+pub struct Winner {
+    pub name: String,
+    pub amount: usize,
+    pub bid_count: usize,
+}
+
+
 pub enum BidResult {
     Ok { first: bool },
     RepeatBidder,
@@ -161,5 +170,18 @@ impl Auction {
         self.prize.as_ref()
             .map(|s| format!(" for {s}"))
             .unwrap_or_default()
+    }
+
+    pub fn winner(&self) -> Option<Winner> {
+        let Bid { amount, ref bidder, .. } = *self.last_bid()?;
+        let bid_count = self.bids.iter()
+            .filter(|bid| bid.bidder.eq_ignore_ascii_case(bidder))
+            .count();
+
+        Some(Winner {
+            name: bidder.clone(),
+            amount,
+            bid_count,
+        })
     }
 }
