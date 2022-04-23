@@ -13,20 +13,22 @@ macro_rules! _msg {
     (#FATAL) => { "\x1B[1;93;41m" };
     (#WARN) => { "\x1B[33m" };
     (#ERR) => { "\x1B[91m" };
+    (#DB) => { "\x1B[90m" };
 
     //  A string literal, potentially followed by formatting arguments.
-    (@$fmt:tt $pre:tt: $text:literal $($tail:tt)*) => {
-        eprintln!(
+    (@$macro:ident $fmt:tt $pre:tt: $text:literal $($tail:tt)*) => {
+        $macro!(
             concat!(
                 $crate::_msg!(#$fmt),
                 concat!(stringify!($pre), ": ", $text),
                 $crate::_msg!(#RESET),
-            ) $($tail)*
+            )
+            $($tail)*
         )
     };
 
     //  Formatting arguments; Insert a pair of template braces.
-    (@$fmt:tt $pre:tt: $($tail:tt)+) => {_msg!(@$fmt $pre: "{}", $($tail)+)};
+    (@$macro:ident $fmt:tt $pre:tt: $($tail:tt)+) => {_msg!(@$macro $fmt $pre: "{}", $($tail)+)};
 }
 
 #[cfg(feature = "chrono")]

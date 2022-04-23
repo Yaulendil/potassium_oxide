@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 argh = "0.1.6"
-chrono = { version = "0.4.19", optional = true }
+chrono = { version = "0.4.19", features = ["serde"], optional = true }
 ctrlc = "3.2"
 directories = "4.0.1"
 humantime = "2.1"

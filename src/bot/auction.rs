@@ -1,9 +1,16 @@
 use std::time::{Duration, Instant};
+#[cfg(feature = "chrono")]
+use chrono::SubsecRound;
+use crate::AuctionFinished;
 
 
+#[derive(Deserialize, Serialize)]
+// #[serde(rename_all = "PascalCase")]
 pub struct Bid {
     pub amount: usize,
     pub bidder: String,
+    #[cfg(feature = "chrono")]
+    pub time: chrono::DateTime<chrono::Utc>,
 }
 
 
@@ -17,14 +24,15 @@ pub enum BidResult {
 
 
 pub struct Auction {
-    current_bid: Option<Bid>,
+    pub bids: Vec<Bid>,
 
-    helmet: Duration,
-    max_raise: usize,
-    min_bid: usize,
+    pub duration: Duration,
+    pub helmet: Duration,
+    pub max_raise: usize,
+    pub min_bid: usize,
 
-    time_begin: Instant,
-    time_close: Instant,
+    pub time_begin: Instant,
+    pub time_close: Instant,
 }
 
 impl Auction {
@@ -37,7 +45,8 @@ impl Auction {
         let now = Instant::now();
 
         Self {
-            current_bid: None,
+            bids: Vec::new(),
+            duration,
             helmet,
             max_raise,
             min_bid,
@@ -57,17 +66,18 @@ impl Auction {
     ) -> BidResult {
         let first: bool = if let Some(Bid {
             amount: bid_current,
-            bidder: ref name_current,
-        }) = self.current_bid {
+            bidder: name_current,
+            ..
+        }) = self.last_bid() {
             if name_new.as_ref().eq_ignore_ascii_case(name_current) {
                 return BidResult::RepeatBidder;
             }
 
-            if bid_new <= bid_current {
-                return BidResult::DoesNotRaise(bid_current);
+            if bid_new <= *bid_current {
+                return BidResult::DoesNotRaise(*bid_current);
             }
 
-            if self.max_raise < bid_new.saturating_sub(bid_current) {
+            if self.max_raise < bid_new.saturating_sub(*bid_current) {
                 return BidResult::AboveMaximum(self.max_raise);
             }
 
@@ -79,9 +89,11 @@ impl Auction {
         if bid_new < self.min_bid {
             BidResult::BelowMinimum(self.min_bid)
         } else {
-            self.current_bid.replace(Bid {
+            self.bids.push(Bid {
                 amount: bid_new,
                 bidder: name_new.as_ref().to_string(),
+                #[cfg(feature = "chrono")]
+                time: chrono::Utc::now().round_subsecs(2),
             });
 
             self.deflect_sniper();
@@ -97,16 +109,16 @@ impl Auction {
         }
     }
 
-    pub fn get_bid(&self) -> Option<&Bid> {
-        self.current_bid.as_ref()
+    pub fn last_bid(&self) -> Option<&Bid> {
+        self.bids.last()
     }
-
-    pub fn get_minimum(&self) -> usize { self.min_bid }
 
     pub fn remaining(&self) -> Option<Duration> {
         self.time_close.checked_duration_since(Instant::now())
             .map(|d| Duration::new(d.as_secs(), 0))
     }
+
+    pub fn finish(self) -> AuctionFinished { self.into() }
 }
 
 impl Auction {

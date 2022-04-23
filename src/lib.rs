@@ -6,10 +6,12 @@ mod macros;
 
 pub mod bot;
 pub mod config;
+pub mod saving;
 
+use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 pub use bot::{Bot, BotExit};
 pub use config::{Config, ConfigFile};
-use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
+use saving::AuctionFinished;
 
 
 static STOP: AtomicBool = AtomicBool::new(false);

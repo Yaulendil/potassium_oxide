@@ -1,4 +1,4 @@
-mod auction;
+pub mod auction;
 mod client;
 mod exit;
 mod util;
@@ -40,38 +40,46 @@ fn substring_to_end<'a>(main: &'a str, sub: &str) -> Option<&'a str> {
 }
 
 
-fn auction_check(lock: &mut Option<Auction>) -> Option<String> {
+enum AuctionStatus {
+    Active(Option<String>),
+    Ended(String, Auction),
+    Inactive,
+}
+
+
+fn auction_check(lock: &mut Option<Auction>) -> AuctionStatus {
+    use AuctionStatus::*;
+
     match lock {
         Some(auction) => match auction.remaining() {
             Some(time) => match time.as_secs() + 1 {
-                t @ 1..=5 => Some(format!("Auction: {}...", t)),
+                t @ 1..=5 => Active(Some(format!("Auction: {}...", t))),
 
                 t @ (10 | 15 | 30 | 60 // <=1m
                 | 120 | 300 | 600 | 900 | 1800 | 3600 // <=1h
-                | 7200 | 10800) => match auction.get_bid() {
-                    Some(Bid { amount, .. }) => Some(format!(
+                | 7200 | 10800) => match auction.last_bid() {
+                    Some(Bid { amount, .. }) => Active(Some(format!(
                         "Auction: {} seconds remain. The current bid is {}.",
                         t, usd!(amount),
-                    )),
-                    None => Some(format!("Auction: {} seconds remain.", t)),
+                    ))),
+                    None => Active(Some(format!("Auction: {} seconds remain.", t))),
                 }
 
-                _ => None,
+                _ => Active(None),
             }
             None => {
-                let out: Option<String> = match auction.get_bid() {
-                    Some(Bid { amount, bidder }) => Some(format!(
+                let out: String = match auction.last_bid() {
+                    Some(Bid { amount, bidder, .. }) => format!(
                         "The Auction has been won by @{}, with a bid of {}.",
                         bidder, usd!(amount),
-                    )),
-                    None => Some("The Auction has ended with no bids.".into()),
+                    ),
+                    None => "The Auction has ended with no bids.".into(),
                 };
 
-                lock.take();
-                out
+                Ended(out, lock.take().unwrap())
             }
         }
-        None => None,
+        None => Inactive,
     }
 }
 
@@ -154,14 +162,14 @@ impl Bot {
 
                     auction.add_time(downtime);
 
-                    let status = match auction.get_bid() {
-                        Some(Bid { amount, bidder }) => format!(
+                    let status = match auction.last_bid() {
+                        Some(Bid { amount, bidder, .. }) => format!(
                             "The highest bidder is currently @{} at {}",
                             bidder, usd!(amount),
                         ),
                         None => format!(
                             "The minimum bid is {}",
-                            usd!(auction.get_minimum()),
+                            usd!(auction.min_bid),
                         ),
                     };
 
@@ -183,7 +191,8 @@ impl Bot {
         let auction_loop = {
             let mut cli: Client = client.clone();
             let auction: Arc<Mutex<Option<Auction>>> = self.auction.clone();
-            let subname: String = format!("#{}/auctions", self.channel);
+            let channel: String = self.channel.clone();
+            let subname: String = format!("#{}/auctions", channel);
 
             Builder::new().name(subname).spawn(move || {
                 /// Interval between Auction updates.
@@ -197,13 +206,22 @@ impl Bot {
 
                 while crate::running() && cli.is_running() {
                     if let Some(mut lock) = auction.try_lock_for(TO) {
-                        if let Some(text) = auction_check(&mut lock) {
+                        let status = auction_check(&mut lock);
+
+                        if let AuctionStatus::Active(Some(text))
+                        | AuctionStatus::Ended(text, _) = &status {
                             if let Err(e) = block_on(cli.send(text)) {
                                 err!(
                                     "Error on Auction thread {:?}: {}",
                                     current().name().unwrap_or_default(), e,
                                 );
                                 break;
+                            }
+                        }
+
+                        if let AuctionStatus::Ended(_, auction) = status {
+                            if let Err(e) = auction.finish().save(&channel) {
+                                warn!("Failed to save Auction data: {}", e);
                             }
                         }
                     }
@@ -257,14 +275,14 @@ impl Bot {
                     auction.remaining().unwrap_or_default(),
                 );
 
-                Some(Reply(match auction.get_bid() {
+                Some(Reply(match auction.last_bid() {
                     None => format!(
                         "The Auction still has {} remaining. The minimum bid \
                         is {}, but there have not been any bids yet.",
                         time,
-                        usd!(auction.get_minimum()),
+                        usd!(auction.min_bid),
                     ),
-                    Some(Bid { amount, bidder }) => format!(
+                    Some(Bid { amount, bidder, .. }) => format!(
                         "The Auction still has {} remaining. The leader is \
                         currently {}, who bids {}.",
                         time,
