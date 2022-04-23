@@ -102,13 +102,13 @@ impl Bot {
     }
 
     fn authenticate(&self, msg: &Privmsg<'_>) -> bool {
-        self.config.is_admin(msg.name())
+        self.config.is_admin(msg.name(), msg.channel().trim_start_matches('#'))
             || msg.is_broadcaster()
             || msg.is_moderator()
     }
 
     fn should_ignore(&self, msg: &Privmsg<'_>) -> bool {
-        self.config.is_blacklisted(msg.name())
+        self.config.is_blacklisted(msg.name(), msg.channel().trim_start_matches('#'))
     }
 
     pub fn run(&mut self) -> Result<(), String> {

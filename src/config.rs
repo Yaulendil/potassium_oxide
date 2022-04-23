@@ -1,12 +1,13 @@
 use directories::ProjectDirs;
 use std::{
+    collections::HashMap,
     fs::{create_dir, File, rename},
     io::{Error as ErrorIo, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     time::Duration,
 };
 use std::ops::{Deref, DerefMut};
-use toml::{de::Error as ErrorToml, map::Map, Value};
+use toml::de::Error as ErrorToml;
 use twitchchat::twitch::{UserConfig, UserConfigError};
 
 
@@ -27,13 +28,9 @@ fn contains<I, T, U>(sequence: I, want: U) -> bool where
 
 
 /// Locate the Path of the Config File.
-fn find_path(create_missing: bool) -> Option<PathBuf> {
+fn find_path() -> Option<PathBuf> {
     let dirs: ProjectDirs = ProjectDirs::from("", "", env!("CARGO_PKG_NAME"))?;
     let mut path: PathBuf = dirs.config_dir().to_owned();
-
-    if create_missing && !path.exists() {
-        create_dir(&path).ok()?;
-    }
 
     path.push(CONFIG_PATH);
     Some(path)
@@ -87,7 +84,9 @@ pub struct ConfigAuth {
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct ConfigAdmin {
+    #[serde(default)]
     admins: Vec<String>,
+    #[serde(default)]
     blacklist: Vec<String>,
 
     parse_commands: bool,
@@ -109,12 +108,28 @@ pub struct ConfigAuction {
 
 
 #[derive(Clone, Deserialize, Serialize)]
+pub struct ConfigChannel {
+    admins: Option<Vec<String>>,
+    blacklist: Option<Vec<String>>,
+
+    duration: Option<u64>,
+    helmet: Option<u64>,
+
+    max_raise: Option<usize>,
+    min_bid: Option<usize>,
+
+    verb: Option<String>,
+}
+
+
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Config {
     auth: ConfigAuth,
     admin: ConfigAdmin,
     auction: ConfigAuction,
 
-    channel: Option<Map<String, Value>>,
+    #[serde(rename = "channel")]
+    channels: Option<HashMap<String, ConfigChannel>>,
 }
 
 
@@ -138,7 +153,7 @@ impl Config {
     pub fn find(path_opt: Option<PathBuf>) -> ConfigFind {
         use ConfigFind::*;
 
-        match path_opt.or_else(|| find_path(false)) {
+        match path_opt.or_else(find_path) {
             None => NoPath,
             Some(path) if !path.exists() => DoesNotExist(path),
             Some(path) => {
@@ -186,8 +201,8 @@ impl Config {
 
 /// Methods for retrieving configuration data without exposing the Struct.
 impl Config {
-    fn get(&self, channel: &str, key: &str) -> Option<&Value> {
-        self.channel.as_ref()?.get(channel)?.as_table()?.get(key)
+    fn config_channel(&self, channel: &str) -> Option<&ConfigChannel> {
+        self.channels.as_ref()?.get(channel)
     }
 
     pub fn get_auth(&self) -> Result<UserConfig, UserConfigError> {
@@ -199,30 +214,30 @@ impl Config {
     }
 
     pub fn get_duration(&self, channel: &str) -> Duration {
-        Duration::from_secs(match self.get(channel, "duration").cloned() {
-            Some(value) => value.try_into().unwrap_or(self.auction.duration),
-            None => self.auction.duration,
+        Duration::from_secs(match self.config_channel(channel) {
+            Some(ConfigChannel { duration: Some(value), .. }) => *value,
+            _ => self.auction.duration,
         })
     }
 
     pub fn get_helmet(&self, channel: &str) -> Duration {
-        Duration::from_secs(match self.get(channel, "helmet").cloned() {
-            Some(value) => value.try_into().unwrap_or(self.auction.helmet),
-            None => self.auction.helmet,
+        Duration::from_secs(match self.config_channel(channel) {
+            Some(ConfigChannel { helmet: Some(value), .. }) => *value,
+            _ => self.auction.helmet,
         })
     }
 
     pub fn get_max_raise(&self, channel: &str) -> usize {
-        match self.get(channel, "max_raise").cloned() {
-            Some(value) => value.try_into().unwrap_or(self.auction.max_raise),
-            None => self.auction.max_raise,
+        match self.config_channel(channel) {
+            Some(ConfigChannel { max_raise: Some(value), .. }) => *value,
+            _ => self.auction.max_raise,
         }
     }
 
     pub fn get_min_bid(&self, channel: &str) -> usize {
-        match self.get(channel, "min_bid").cloned() {
-            Some(value) => value.try_into().unwrap_or(self.auction.min_bid),
-            None => self.auction.min_bid,
+        match self.config_channel(channel) {
+            Some(ConfigChannel { min_bid: Some(value), .. }) => *value,
+            _ => self.auction.min_bid,
         }
     }
 
@@ -230,7 +245,7 @@ impl Config {
         self.admin.parse_commands
     }
 
-    pub fn get_prefix(&self) -> &str {
+    pub const fn get_prefix(&self) -> &String {
         &self.admin.prefix
     }
 
@@ -239,17 +254,41 @@ impl Config {
     }
 
     pub fn get_verb(&self, channel: &str) -> &str {
-        match self.get(channel, "verb") {
-            Some(value) => value.as_str().unwrap_or(&self.auction.verb),
-            None => &self.auction.verb,
+        match self.config_channel(channel) {
+            Some(ConfigChannel { verb: Some(value), .. }) => value,
+            _ => &self.auction.verb,
         }
     }
 
-    pub fn is_admin(&self, name: &str) -> bool {
+    pub fn is_admin(&self, name: &str, channel: &str) -> bool {
+        if self.is_globally_admin(name) {
+            true
+        } else {
+            match self.config_channel(channel) {
+                Some(ConfigChannel { admins: Some(list), .. })
+                => contains(list, name),
+                _ => false,
+            }
+        }
+    }
+
+    pub fn is_blacklisted(&self, name: &str, channel: &str) -> bool {
+        if self.is_globally_blacklisted(name) {
+            true
+        } else {
+            match self.config_channel(channel) {
+                Some(ConfigChannel { blacklist: Some(list), .. })
+                => contains(list, name),
+                _ => false,
+            }
+        }
+    }
+
+    pub fn is_globally_admin(&self, name: &str) -> bool {
         contains(&self.admin.admins, name)
     }
 
-    pub fn is_blacklisted(&self, name: &str) -> bool {
+    pub fn is_globally_blacklisted(&self, name: &str) -> bool {
         contains(&self.admin.blacklist, name)
     }
 }
