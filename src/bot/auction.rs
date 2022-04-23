@@ -5,7 +5,7 @@ use crate::AuctionFinished;
 
 
 #[derive(Deserialize, Serialize)]
-// #[serde(rename_all = "PascalCase")]
+#[cfg_attr(feature = "summaries_pascal", serde(rename_all = "PascalCase"))]
 pub struct Bid {
     pub amount: usize,
     pub bidder: String,
@@ -15,7 +15,7 @@ pub struct Bid {
 
 
 #[derive(Deserialize, Serialize)]
-// #[serde(rename_all = "PascalCase")]
+#[cfg_attr(feature = "summaries_pascal", serde(rename_all = "PascalCase"))]
 pub struct Winner {
     pub name: String,
     pub amount: usize,

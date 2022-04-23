@@ -29,3 +29,6 @@ panic = "abort"
 
 [features]
 default = ["chrono"]
+
+# Use PascalCase rather than snake_case for fields in summary files.
+summaries_pascal = []

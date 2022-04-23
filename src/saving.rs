@@ -6,7 +6,7 @@ use crate::bot::auction::{Auction, Bid, Winner};
 
 
 #[derive(Deserialize, Serialize)]
-// #[serde(rename_all = "PascalCase")]
+#[cfg_attr(feature = "summaries_pascal", serde(rename_all = "PascalCase"))]
 pub struct AuctionFinished {
     pub prize: Option<String>,
     pub minimum_bid: usize,
