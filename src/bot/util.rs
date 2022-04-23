@@ -19,6 +19,11 @@ const fn get_quoted(text: &str) -> Option<Range<usize>> {
 }
 
 
+pub const fn is_quoted(text: &str) -> bool {
+    get_quoted(text).is_some()
+}
+
+
 pub fn unquote(text: &str) -> &str {
     match get_quoted(text) {
         Some(inner) => &text[inner],
@@ -76,7 +81,7 @@ pub fn split_cmd(line: &str) -> (&str, Vec<&str>) {
 }
 
 
-pub fn substring_to_end<'a>(main: &'a str, sub: &str) -> Option<&'a str> {
+pub fn substring_to_end<'a>(main: &'a str, sub: &'a str) -> Option<&'a str> {
     let valid = main.as_bytes().as_ptr_range();
 
     if !sub.is_empty() && valid.contains(&sub.as_ptr()) {
@@ -85,5 +90,14 @@ pub fn substring_to_end<'a>(main: &'a str, sub: &str) -> Option<&'a str> {
         Some(&main[idx..])
     } else {
         None
+    }
+}
+
+
+pub fn to_end_unquoted<'a>(main: &'a str, arr: &[&'a str]) -> Option<&'a str> {
+    match arr {
+        [] => None,
+        [single] => Some(unquote(single)),
+        [first, ..] => substring_to_end(main, first),
     }
 }

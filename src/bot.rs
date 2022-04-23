@@ -20,7 +20,7 @@ use crate::ConfigFile;
 use auction::{Auction, Bid, BidResult};
 use client::{Client, Response};
 pub use exit::BotExit;
-pub use util::{split_cmd, substring_to_end, unquote};
+pub use util::{is_quoted, split_cmd, substring_to_end, to_end_unquoted, unquote};
 
 
 /// Define the values of remaining time at which an update on the auction should
@@ -389,8 +389,10 @@ impl Bot {
                 }.into())),
                 _ => None,
             }
-            ["bid", arg, ..] => match substring_to_end(line, arg)
-                .unwrap_or(arg).trim_start_matches('$').parse::<usize>()
+            ["bid", args @ ..] if !args.is_empty() => match to_end_unquoted(line, args)
+                .unwrap_or_else(|| unquote(args[0]))
+                .trim_start_matches('$')
+                .parse::<usize>()
             {
                 Ok(bid) => Some(match self.auction.lock()
                     .as_mut()?
@@ -399,7 +401,8 @@ impl Bot {
                     BidResult::Ok { first } => Message(format!(
                         "{} BID: @{} has bid {}.",
                         if first { "FIRST" } else { "NEW" },
-                        author, usd!(bid),
+                        author,
+                        usd!(bid),
                     )),
                     BidResult::RepeatBidder(bid) => Reply(format!(
                         "You are already the top bidder at {}.",
