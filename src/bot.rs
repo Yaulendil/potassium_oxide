@@ -59,10 +59,16 @@ fn auction_check(lock: &mut Option<Auction>) -> AuctionStatus {
                 | 120 | 300 | 600 | 900 | 1800 | 3600 // <=1h
                 | 7200 | 10800) => match auction.last_bid() {
                     Some(Bid { amount, .. }) => Active(Some(format!(
-                        "Auction: {} seconds remain. The current bid is {}.",
-                        t, usd!(amount),
+                        "Auction: {} seconds remain. The current bid{} is {}.",
+                        t, auction.for_prize(), usd!(amount),
                     ))),
-                    None => Active(Some(format!("Auction: {} seconds remain.", t))),
+                    None => Active(Some(match auction.prize.as_ref() {
+                        Some(prize) => format!(
+                            "Auction: {} seconds remain to bid for {}.",
+                            t, prize,
+                        ),
+                        None => format!("Auction: {} seconds remain.", t),
+                    })),
                 }
 
                 _ => Active(None),
@@ -70,10 +76,13 @@ fn auction_check(lock: &mut Option<Auction>) -> AuctionStatus {
             None => {
                 let out: String = match auction.last_bid() {
                     Some(Bid { amount, bidder, .. }) => format!(
-                        "The Auction has been won by @{}, with a bid of {}.",
-                        bidder, usd!(amount),
+                        "The {} has been won by @{}, with a bid of {}.",
+                        auction.describe(), bidder, usd!(amount),
                     ),
-                    None => "The Auction has ended with no bids.".into(),
+                    None => format!(
+                        "The {} has ended with no bids.",
+                        auction.describe(),
+                    ),
                 };
 
                 Ended(out, lock.take().unwrap())
@@ -280,14 +289,16 @@ impl Bot {
 
                 Some(Reply(match auction.last_bid() {
                     None => format!(
-                        "The Auction still has {} remaining. The minimum bid \
+                        "The {} still has {} remaining. The minimum bid \
                         is {}, but there have not been any bids yet.",
+                        auction.describe(),
                         time,
                         usd!(auction.min_bid),
                     ),
                     Some(Bid { amount, bidder, .. }) => format!(
-                        "The Auction still has {} remaining. The leader is \
+                        "The {} still has {} remaining. The leader is \
                         currently {}, who bids {}.",
+                        auction.describe(),
                         time,
                         bidder,
                         usd!(amount),
@@ -312,38 +323,47 @@ impl Bot {
                         let mut min = self.config.min_bid(channel);
                         let mut vrb = self.config.verb(channel);
                         let mut tok = args.iter();
+                        let mut prz = None;
 
                         while let Some(flag) = tok.next() {
                             match *flag {
-                                "-d" | "-t" => if let Some(val) = tok.next() {
+                                "-d" | "-t" | "--time"
+                                => if let Some(val) = tok.next() {
                                     if let Ok(vl) = val.parse() {
                                         dur = Duration::from_secs(vl);
                                     }
                                 }
-                                "-h" => if let Some(val) = tok.next() {
+                                "-h" | "--helm" | "--helmet"
+                                => if let Some(val) = tok.next() {
                                     if let Ok(vl) = val.parse() {
                                         hlm = Duration::from_secs(vl);
                                     }
                                 }
-                                "-r" => if let Some(val) = tok.next() {
+                                "-r" | "--raise" | "--limit"
+                                => if let Some(val) = tok.next() {
                                     if let Ok(vl) = val.parse() {
                                         max = vl;
                                     }
                                 }
-                                "-m" => if let Some(val) = tok.next() {
+                                "-m" | "--min"
+                                => if let Some(val) = tok.next() {
                                     if let Ok(vl) = val.parse() {
                                         min = vl;
                                     }
                                 }
-                                "-v" => if let Some(val) = tok.next() {
+                                "-v" | "--verb"
+                                => if let Some(val) = tok.next() {
                                     vrb = val;
+                                }
+                                "--prize" => {
+                                    prz = tok.next();
                                 }
                                 _ => {}
                             }
                         }
 
                         let new: &mut Auction = lock.insert(Auction::new(
-                            dur, hlm, max, min,
+                            dur, hlm, max, min, prz.map(|s| String::from(unquote(s))),
                         ));
 
                         Some(Message(new.explain(

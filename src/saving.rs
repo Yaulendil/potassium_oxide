@@ -8,6 +8,9 @@ use crate::bot::auction::{Auction, Bid};
 #[derive(Deserialize, Serialize)]
 // #[serde(rename_all = "PascalCase")]
 pub struct AuctionFinished {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prize: Option<String>,
+
     pub minimum_bid: usize,
     pub raise_limit: usize,
     pub duration: u64,
@@ -77,6 +80,7 @@ impl From<Auction> for AuctionFinished {
         Self {
             bids: auction.bids,
 
+            prize: auction.prize,
             minimum_bid: auction.min_bid,
             raise_limit: auction.max_raise,
             duration: auction.duration.as_secs(),

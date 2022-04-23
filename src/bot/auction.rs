@@ -25,6 +25,7 @@ pub enum BidResult {
 
 pub struct Auction {
     pub bids: Vec<Bid>,
+    pub prize: Option<String>,
 
     pub duration: Duration,
     pub helmet: Duration,
@@ -41,11 +42,13 @@ impl Auction {
         helmet: Duration,
         max_raise: usize,
         min_bid: usize,
+        prize: Option<String>,
     ) -> Self {
         let now = Instant::now();
 
         Self {
             bids: Vec::new(),
+            prize,
             duration,
             helmet,
             max_raise,
@@ -93,7 +96,7 @@ impl Auction {
                 amount: bid_new,
                 bidder: name_new.as_ref().to_string(),
                 #[cfg(feature = "chrono")]
-                time: chrono::Utc::now().round_subsecs(2),
+                time: chrono::Utc::now().round_subsecs(3),
             });
 
             self.deflect_sniper();
@@ -122,9 +125,13 @@ impl Auction {
 }
 
 impl Auction {
+    pub fn describe(&self) -> String {
+        format!("Auction{}", self.for_prize())
+    }
+
     pub fn explain(&self, prefix: &str, verb: &str) -> String {
         format!(
-            "ATTENTION: The Auction will run for {time}. Submit a bid by \
+            "ATTENTION: An {auction} will now run for {time}. Submit a bid by \
             posting '{prefix}bid <amount>'. Focus on this chat, NOT any 'live' \
             video, since there may be a delay. You cannot raise by more than \
             {max_raise}. I will confirm bids in chat. At the end, I will do a \
@@ -132,13 +139,20 @@ impl Auction {
             person with the highest bid at that time will be declared the \
             winner, and they will have to {verb} that amount in order to claim \
             their prize. Bidding starts at {min_bid}.",
-            max_raise=usd!(self.max_raise),
-            min_bid=usd!(self.min_bid),
-            prefix=prefix,
-            time=humantime::format_duration(
+            auction = self.describe(),
+            max_raise = usd!(self.max_raise),
+            min_bid = usd!(self.min_bid),
+            prefix = prefix,
+            time = humantime::format_duration(
                 self.time_close.saturating_duration_since(self.time_begin)
             ),
-            verb=verb,
+            verb = verb,
         )
+    }
+
+    pub fn for_prize(&self) -> String {
+        self.prize.as_ref()
+            .map(|s| format!(" for {s}"))
+            .unwrap_or_default()
     }
 }
