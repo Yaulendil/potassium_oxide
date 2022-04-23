@@ -26,6 +26,12 @@ min_bid = 5
 #   descriptive.
 verb = "tip"
 
+# Whether to save a summary file of each Auction. The summary file will be in
+#   TOML format (the same as this config file), and will contain the settings
+#   used for the Auction, as well as all bids. Its location will be printed on
+#   Standard Output.
+summary = true
+
 
 [admin]
 # By default, the Broadcaster and Moderators of a channel can control Auctions

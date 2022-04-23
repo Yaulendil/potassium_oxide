@@ -103,6 +103,7 @@ pub struct ConfigAuction {
     max_raise: usize,
     min_bid: usize,
 
+    summary: bool,
     verb: String,
 }
 
@@ -118,6 +119,7 @@ pub struct ConfigChannel {
     max_raise: Option<usize>,
     min_bid: Option<usize>,
 
+    summary: Option<bool>,
     verb: Option<String>,
 }
 
@@ -251,6 +253,13 @@ impl Config {
 
     pub const fn reconnect(&self) -> Duration {
         Duration::from_secs(self.admin.reconnect)
+    }
+
+    pub fn summary(&self, channel: &str) -> bool {
+        match self.config_channel(channel) {
+            Some(ConfigChannel { summary: Some(value), .. }) => *value,
+            _ => self.auction.summary,
+        }
     }
 
     pub fn verb(&self, channel: &str) -> &str {

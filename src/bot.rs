@@ -193,19 +193,20 @@ impl Bot {
             let auction: Arc<Mutex<Option<Auction>>> = self.auction.clone();
             let channel: String = self.channel.clone();
             let subname: String = format!("#{}/auctions", channel);
+            let summary: bool = self.config.summary(&channel);
 
             Builder::new().name(subname).spawn(move || {
                 /// Interval between Auction updates.
                 const INTERVAL: Duration = Duration::from_secs(1);
                 /// Timeout period to try locking the Auction Mutex.
-                const TO: Duration = Duration::from_millis(
+                const TIMEOUT: Duration = Duration::from_millis(
                     (INTERVAL.as_millis() / 2) as _
                 );
 
                 let mut time = Instant::now();
 
                 while crate::running() && cli.is_running() {
-                    if let Some(mut lock) = auction.try_lock_for(TO) {
+                    if let Some(mut lock) = auction.try_lock_for(TIMEOUT) {
                         let status = auction_check(&mut lock);
 
                         if let AuctionStatus::Active(Some(text))
@@ -219,9 +220,11 @@ impl Bot {
                             }
                         }
 
-                        if let AuctionStatus::Ended(_, auction) = status {
-                            if let Err(e) = auction.finish().save(&channel) {
-                                warn!("Failed to save Auction data: {}", e);
+                        if let AuctionStatus::Ended(_, auct) = status {
+                            if summary {
+                                if let Err(e) = auct.finish().save(&channel) {
+                                    warn!("Failed to save Auction data: {}", e);
+                                }
                             }
                         }
                     }
