@@ -343,8 +343,9 @@ impl Bot {
                     .as_mut()?
                     .bid(&author, bid)
                 {
-                    BidResult::Ok => Message(format!(
-                        "NEW BID: @{} has bid {}.",
+                    BidResult::Ok { first } => Message(format!(
+                        "{} BID: @{} has bid {}.",
+                        if first { "FIRST" } else { "NEW" },
                         author, usd!(bid),
                     )),
                     BidResult::RepeatBidder => Reply(

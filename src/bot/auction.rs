@@ -8,7 +8,7 @@ pub struct Bid {
 
 
 pub enum BidResult {
-    Ok,
+    Ok { first: bool },
     RepeatBidder,
     AboveMaximum(usize),
     BelowMinimum(usize),
@@ -55,7 +55,7 @@ impl Auction {
         name_new: impl AsRef<str>,
         bid_new: usize,
     ) -> BidResult {
-        if let Some(Bid {
+        let first: bool = if let Some(Bid {
             amount: bid_current,
             bidder: ref name_current,
         }) = self.current_bid {
@@ -70,19 +70,23 @@ impl Auction {
             if self.max_raise < bid_new.saturating_sub(bid_current) {
                 return BidResult::AboveMaximum(self.max_raise);
             }
-        }
+
+            false
+        } else {
+            true
+        };
 
         if bid_new < self.min_bid {
-            return BidResult::BelowMinimum(self.min_bid);
+            BidResult::BelowMinimum(self.min_bid)
+        } else {
+            self.current_bid.replace(Bid {
+                amount: bid_new,
+                bidder: name_new.as_ref().to_string(),
+            });
+
+            self.deflect_sniper();
+            BidResult::Ok { first }
         }
-
-        self.current_bid.replace(Bid {
-            amount: bid_new,
-            bidder: name_new.as_ref().to_string(),
-        });
-
-        self.deflect_sniper();
-        BidResult::Ok
     }
 
     fn deflect_sniper(&mut self) {
