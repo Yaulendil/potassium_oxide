@@ -25,18 +25,23 @@ pub use util::{is_quoted, split_cmd, substring_to_end, to_end_unquoted, unquote}
 
 /// Define the values of remaining time at which an update on the auction should
 ///     be posted to chat automatically.
-macro_rules! announce_time {
-    ($t:expr) => {matches!(
-        $t, // Check by number of seconds.
+const fn announce_time(sec: u64) -> bool {
+    match sec {
         10 | 15 | 30 | 60 // <=1m
         | 120 | 300 | 600 | 900 | 1800 | 3600 // <=1h
-    ) || ($t % 3600 == 0 && matches!(
-        $t / 3600, // Check by number of hours.
-        1..=24 // <=1d
-        | 36 | 48 | 72 // <=3d
-        //  Beyond this, people should just use the status command. This may
-        //      already be too far.
-    ))};
+        => true,
+        _ if 0 == sec % 3600 => {
+            match sec / 3600 {
+                1..=24 // <=1d
+                | 36 | 48 | 72 // <=3d
+                //  Beyond this, people can just use the status command. This
+                //      may already be too far.
+                => true,
+                _ => false,
+            }
+        }
+        _ => false,
+    }
 }
 
 
@@ -55,7 +60,7 @@ fn auction_check(lock: &mut Option<Auction>) -> AuctionStatus {
             Some(time) => match time.as_secs() + 1 {
                 t @ 1..=5 => Active(Some(format!("Auction: {}...", t))),
 
-                t if announce_time!(t) => match auction.last_bid() {
+                t if announce_time(t) => match auction.last_bid() {
                     Some(Bid { amount, .. }) => Active(Some(format!(
                         "Auction: {} seconds remain. The current bid{} is {}.",
                         t, auction.for_prize(), usd!(amount),
