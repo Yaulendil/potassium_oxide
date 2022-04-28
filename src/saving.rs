@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{fmt::Display, io::Write};
 #[cfg(feature = "chrono")]
 use chrono::{DateTime, Duration, SecondsFormat, SubsecRound, Utc};
 use directories::ProjectDirs;
@@ -27,6 +27,47 @@ pub struct AuctionFinished {
 }
 
 impl AuctionFinished {
+    const FILE_EXT: &'static str = "toml";
+
+    fn file_name(&self, channel: &str) -> String {
+        match &self.prize {
+            Some(prize) => format!(
+                "{stem}-{prize}.{ext}",
+                stem = self.file_stem(channel),
+                prize = prize.to_snake_case(),
+                ext = Self::FILE_EXT,
+            ),
+            None => format!(
+                "{stem}.{ext}",
+                stem = self.file_stem(channel),
+                ext = Self::FILE_EXT,
+            ),
+        }
+    }
+
+    fn file_stem(&self, channel: &str) -> String {
+        format!(
+            "auction-{}-{}",
+            //  Hash trimming is redundant for now, but just to be future safe.
+            channel.trim_start_matches('#'),
+            self.timestamp(),
+        )
+    }
+
+    #[cfg(feature = "chrono")]
+    fn timestamp(&self) -> impl Display {
+        self.opened.to_rfc3339_opts(SecondsFormat::Secs, true)
+    }
+
+    #[cfg(not(feature = "chrono"))]
+    fn timestamp(&self) -> impl Display {
+        std::time::SystemTime::UNIX_EPOCH.elapsed()
+            .unwrap_or_default()
+            .as_secs()
+    }
+}
+
+impl AuctionFinished {
     pub fn save(&self, channel: &str) -> std::io::Result<()> {
         info!("Saving auction data...");
 
@@ -35,25 +76,8 @@ impl AuctionFinished {
                 Ok(data) => {
                     let mut path = dirs.data_dir().to_owned();
                     std::fs::create_dir_all(&path)?;
+                    path.push(self.file_name(channel));
 
-                    #[cfg(feature = "chrono")]
-                    let ts = self.opened.to_rfc3339_opts(
-                        SecondsFormat::Secs,
-                        true,
-                    );
-                    #[cfg(not(feature = "chrono"))]
-                    let ts = std::time::SystemTime::UNIX_EPOCH.elapsed()
-                        .unwrap_or_default().as_secs();
-
-                    let prize = match &self.prize {
-                        Some(prize) => format!("-{}", prize.to_snake_case()),
-                        None => String::new(),
-                    };
-
-                    path.push(format!(
-                        "auction-{}-{}{}.toml",
-                        channel, ts, prize,
-                    ));
                     let mut file = std::fs::File::create(&path)?;
                     file.write_all(&data)?;
 
