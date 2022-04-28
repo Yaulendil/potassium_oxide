@@ -2,7 +2,7 @@ use std::io::Write;
 #[cfg(feature = "chrono")]
 use chrono::{DateTime, Duration, SecondsFormat, SubsecRound, Utc};
 use directories::ProjectDirs;
-use heck::ToSnakeCase;
+use heck::SnakeCase;
 use crate::bot::auction::{Auction, Bid, Winner};
 
 
