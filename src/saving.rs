@@ -2,6 +2,7 @@ use std::io::Write;
 #[cfg(feature = "chrono")]
 use chrono::{DateTime, Duration, SecondsFormat, SubsecRound, Utc};
 use directories::ProjectDirs;
+use heck::ToSnakeCase;
 use crate::bot::auction::{Auction, Bid, Winner};
 
 
@@ -44,7 +45,15 @@ impl AuctionFinished {
                     let ts = std::time::SystemTime::UNIX_EPOCH.elapsed()
                         .unwrap_or_default().as_secs();
 
-                    path.push(format!("auction-{}-{}.toml", channel, ts));
+                    let prize = match &self.prize {
+                        Some(prize) => format!("-{}", prize.to_snake_case()),
+                        None => String::new(),
+                    };
+
+                    path.push(format!(
+                        "auction-{}-{}{}.toml",
+                        channel, ts, prize,
+                    ));
                     let mut file = std::fs::File::create(&path)?;
                     file.write_all(&data)?;
 
