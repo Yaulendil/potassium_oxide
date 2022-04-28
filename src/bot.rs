@@ -432,6 +432,20 @@ impl Bot {
                 ))),
                 _ => None,
             }
+            ["config", ..] if usr_op => {
+                let channel = msg.channel().trim_start_matches('#');
+
+                Some(Reply(format!(
+                    "Auction length is {dur} seconds. \
+                    Helmet value is {hlm} seconds. \
+                    Minimum bid is {min}. \
+                    Maximum raise is {max}.",
+                    dur = self.config.duration(channel).as_secs(),
+                    hlm = self.config.helmet(channel).as_secs(),
+                    max = usd!(self.config.max_raise(channel)),
+                    min = usd!(self.config.min_bid(channel)),
+                )))
+            }
             #[cfg(debug_assertions)]
             ["die", ..] if usr_op => {
                 info!("Bot killed by {}.", author);
