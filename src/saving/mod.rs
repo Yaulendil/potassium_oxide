@@ -111,7 +111,16 @@ impl AuctionFinished {
 
 #[cfg(feature = "csv")]
 impl AuctionFinished {
-    fn builder(headers: bool) -> csv::WriterBuilder {
+    fn csv_reader(headers: bool) -> csv::ReaderBuilder {
+        let mut rb = csv::ReaderBuilder::new();
+
+        rb.has_headers(headers);
+        rb.terminator(csv::Terminator::CRLF);
+
+        rb
+    }
+
+    fn csv_writer(headers: bool) -> csv::WriterBuilder {
         let mut wb = csv::WriterBuilder::new();
 
         wb.has_headers(headers);
@@ -123,13 +132,21 @@ impl AuctionFinished {
 
     pub fn save_csv(&self, path: &std::path::Path) -> std::io::Result<()> {
         let mut csv = if path.exists() {
-            Self::builder(false)
+            if cfg!(feature = "csv_validate") {
+                let mut read = Self::csv_reader(true).from_path(&path)?;
+                let mut iter = read.deserialize::<csv_record::AuctionRecord>();
+
+                if let Some(record) = iter.next() {
+                    record?;
+                }
+            }
+
+            Self::csv_writer(false)
                 .from_writer(File::options()
                     .append(true)
                     .open(&path)?)
         } else {
-            Self::builder(true)
-                .from_path(&path)?
+            Self::csv_writer(true).from_path(&path)?
         };
 
         csv.serialize(self.to_record())?;
