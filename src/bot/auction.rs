@@ -147,16 +147,15 @@ impl Auction {
 
     pub fn explain(&self, prefix: &str, verb: &str) -> String {
         format!(
-            "ATTENTION: An {auction} will now run for {time}. Submit a bid by \
+            "ATTENTION: An Auction will now run for {time}. Submit a bid by \
             posting '{prefix}bid <amount>'. Focus on this chat, NOT any 'live' \
-            video, since there may be a delay. You cannot raise by more than \
-            {max_raise}. I will confirm bids in chat. At the end, I will do a \
-            final 5–1 countdown, after which the Auction will be over. The \
-            person with the highest bid at that time will be declared the \
+            video, since there may be a delay. I will confirm bids in chat. At \
+            the end, I will do a final countdown, after which the Auction will \
+            be over. The person with the highest bid at that time will be the \
             winner, and they will have to {verb} that amount in order to claim \
-            their prize. Bidding starts at {min_bid}.",
-            auction = self.describe(),
-            max_raise = usd!(self.max_raise),
+            their prize. Bidding starts at {min_bid}, and is NOW OPEN.",
+            // auction = self.describe(),
+            // max_raise = usd!(self.max_raise),
             min_bid = usd!(self.min_bid),
             prefix = prefix,
             time = humantime::format_duration(
