@@ -82,22 +82,6 @@ pub struct ConfigAuth {
 
 
 #[derive(Clone, Deserialize, Serialize)]
-pub struct ConfigAdmin {
-    #[serde(default)]
-    admins: Vec<String>,
-    #[serde(default)]
-    blacklist: Vec<String>,
-
-    parse_commands: bool,
-    prefix: String,
-    reconnect: u64,
-
-    #[cfg(feature = "csv")]
-    file_csv: Option<PathBuf>,
-}
-
-
-#[derive(Clone, Deserialize, Serialize)]
 pub struct ConfigAuction {
     duration: u64,
     helmet: u64,
@@ -111,9 +95,26 @@ pub struct ConfigAuction {
 
 
 #[derive(Clone, Deserialize, Serialize)]
+pub struct ConfigBot {
+    #[serde(default)]
+    admins: Vec<String>,
+    #[serde(default, alias = "blacklist")]
+    ignore: Vec<String>,
+
+    parse_commands: bool,
+    prefix: String,
+    reconnect: u64,
+
+    #[cfg(feature = "csv")]
+    file_csv: Option<PathBuf>,
+}
+
+
+#[derive(Clone, Deserialize, Serialize)]
 pub struct ConfigChannel {
     admins: Option<Vec<String>>,
-    blacklist: Option<Vec<String>>,
+    #[serde(alias = "blacklist")]
+    ignore: Option<Vec<String>>,
 
     duration: Option<u64>,
     helmet: Option<u64>,
@@ -129,8 +130,10 @@ pub struct ConfigChannel {
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Config {
     auth: ConfigAuth,
-    admin: ConfigAdmin,
     auction: ConfigAuction,
+
+    #[serde(alias = "admin")]
+    bot: ConfigBot,
 
     #[serde(rename = "channel")]
     channels: Option<HashMap<String, ConfigChannel>>,
@@ -226,7 +229,7 @@ impl Config {
 
     #[cfg(feature = "csv")]
     pub const fn file_csv(&self) -> Option<&PathBuf> {
-        self.admin.file_csv.as_ref()
+        self.bot.file_csv.as_ref()
     }
 
     pub fn helmet(&self, channel: &str) -> Duration {
@@ -251,15 +254,15 @@ impl Config {
     }
 
     pub const fn parse_commands(&self) -> bool {
-        self.admin.parse_commands
+        self.bot.parse_commands
     }
 
     pub const fn prefix(&self) -> &String {
-        &self.admin.prefix
+        &self.bot.prefix
     }
 
     pub const fn reconnect(&self) -> Duration {
-        Duration::from_secs(self.admin.reconnect)
+        Duration::from_secs(self.bot.reconnect)
     }
 
     pub fn summary(&self, channel: &str) -> bool {
@@ -297,7 +300,7 @@ impl Config {
             true
         } else {
             match self.config_channel(channel) {
-                Some(ConfigChannel { blacklist: Some(list), .. })
+                Some(ConfigChannel { ignore: Some(list), .. })
                 => contains(list, name),
                 _ => false,
             }
@@ -305,19 +308,19 @@ impl Config {
     }
 
     pub fn is_globally_admin(&self, name: &str) -> bool {
-        contains(&self.admin.admins, name)
+        contains(&self.bot.admins, name)
     }
 
     pub fn is_globally_blacklisted(&self, name: &str) -> bool {
-        contains(&self.admin.blacklist, name)
+        contains(&self.bot.ignore, name)
     }
 }
 
 
 impl Config {
     pub fn lower(&mut self) {
-        lower(&mut self.admin.admins);
-        lower(&mut self.admin.blacklist);
+        lower(&mut self.bot.admins);
+        lower(&mut self.bot.ignore);
     }
 }
 

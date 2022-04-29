@@ -40,7 +40,8 @@ verb = "tip"
 summary = true
 
 
-[admin]
+# Bot options: These control behavior on all channels.
+[bot]
 # By default, the Broadcaster and Moderators of a channel can control Auctions
 #   in their own channel. This option is a list of usernames that are allowed to
 #   control Auctions in ANY channel; Intended for cases where the maintainer of
@@ -48,7 +49,7 @@ summary = true
 admins = []
 
 # Commands invoked by any username in this list will not be processed.
-blacklist = []
+ignore = []
 
 # With this enabled, Command invocations will be parsed more carefully, allowing
 #   arguments to include spaces by enclosing them in quotation marks. Also, a
