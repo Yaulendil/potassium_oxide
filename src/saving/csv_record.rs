@@ -6,15 +6,22 @@ use super::{AuctionFinished, Winner};
 
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct AuctionRecord {
     #[cfg(feature = "chrono")]
     pub opened: DateTime<Utc>,
     #[cfg(not(feature = "chrono"))]
     pub opened: (),
-    pub time: u64,
-    pub prize: Option<String>,
+
+    #[cfg(feature = "chrono")]
+    pub closed: DateTime<Utc>,
+    #[cfg(not(feature = "chrono"))]
+    pub closed: (),
+
+    pub duration_seconds: u64,
     pub winner: Option<String>,
     pub winning_bid: Option<usize>,
+    pub prize: Option<String>,
 }
 
 impl AuctionRecord {
@@ -23,10 +30,11 @@ impl AuctionRecord {
     //      should be made here.
     fn _drop(self) {
         self.opened;
-        self.time;
-        self.prize;
+        self.closed;
+        self.duration_seconds;
         self.winner;
         self.winning_bid;
+        self.prize;
     }
 }
 
@@ -52,10 +60,15 @@ impl From<&AuctionFinished> for AuctionRecord {
             #[cfg(not(feature = "chrono"))]
             opened: (),
 
-            time: auction.duration,
-            prize: auction.prize.clone(),
+            #[cfg(feature = "chrono")]
+            closed: auction.closed,
+            #[cfg(not(feature = "chrono"))]
+            closed: (),
+
+            duration_seconds: auction.duration,
             winner,
             winning_bid,
+            prize: auction.prize.clone(),
         }
     }
 }
