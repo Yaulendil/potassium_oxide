@@ -20,6 +20,13 @@ max_raise = 500
 # Minimum acceptable value for the first bid.
 min_bid = 5
 
+# If this is true, the FIRST BID may not be higher than the sum of the mininum
+#   bid and the maximum raise. For instance, if the minimum bid is $10 and the
+#   maximum raise is $100, the first bid may not be more than $110. If this is
+#   false, the first bid may be any amount.
+# TODO: Not yet implemented.
+enforce_max_raise_on_first = true
+
 # The verb that describes the payment method to be used by the winner of an
 #   Auction. For instance, if the proceeds go to charity, "donate" may be
 #   preferable; If the payment is to be in Bits, "cheer" would be the most
