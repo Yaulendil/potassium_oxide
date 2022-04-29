@@ -1,6 +1,6 @@
 use std::{fmt::Display, io::Write};
 #[cfg(feature = "chrono")]
-use chrono::{DateTime, Duration, SecondsFormat, SubsecRound, Utc};
+use chrono::{Datelike, DateTime, Duration, SubsecRound, Timelike, Utc};
 use directories::ProjectDirs;
 use heck::SnakeCase;
 use crate::bot::auction::{Auction, Bid, Winner};
@@ -56,7 +56,22 @@ impl AuctionFinished {
 
     #[cfg(feature = "chrono")]
     fn timestamp(&self) -> impl Display {
-        self.opened.to_rfc3339_opts(SecondsFormat::Secs, true)
+        format!(
+            //  yyyymmdd-hhmmss
+            "{:0>4}{:0>2}{:0>2}\
+            -{:0>2}{:0>2}{:0>2}",
+            // //  yyyymmddThhmmssZ
+            // "{:0>4}{:0>2}{:0>2}\
+            // T{:0>2}{:0>2}{:0>2}Z",
+            self.opened.year(),
+            self.opened.month(),
+            self.opened.day(),
+            self.opened.hour(),
+            self.opened.minute(),
+            self.opened.second(),
+        )
+
+        // self.opened.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
     }
 
     #[cfg(not(feature = "chrono"))]
