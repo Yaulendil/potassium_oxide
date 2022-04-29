@@ -136,6 +136,7 @@ impl Bot {
                     }
 
                     if crate::running() {
+                        self.config.reload().ok();
                         let delay: Duration = self.config.reconnect();
                         info!("Reconnecting in {}s.\n", delay.as_secs());
                         Timer::after(delay).await;
@@ -155,12 +156,11 @@ impl Bot {
     }
 
     async fn run_once(&mut self, uconf: &UserConfig) -> Result<BotExit, BotExit> {
-        info!("Connecting...");
+        info!("Joining #{}...", self.channel);
         let connection = Connector::twitch()?;
         let mut runner = AsyncRunner::connect(connection, uconf).await?;
-        info!("Connected.");
-
         let mut client = Client::new(self.channel.clone(), &mut runner).await?;
+        info!("Connected to #{}.", self.channel);
 
         if let Some(stopped) = self.stopped.take() {
             if let Some(mut lock) = self.auction.try_lock() {
@@ -187,9 +187,9 @@ impl Bot {
 
                     client.send(format!(
                         "Sorry, it seems I lost connection for a moment. No \
-                        problem though, I can continue the Auction from where \
-                        it left off. {}, with {} remaining.",
-                        status, time,
+                        problem though, I can continue the {} from where it \
+                        left off. {}, with {} remaining.",
+                        auction.describe(), status, time,
                     )).await?;
                 }
             }
@@ -255,26 +255,33 @@ impl Bot {
             })?
         };
 
-        self.client = Some(client);
-        let result = self.main_loop(runner).await;
-        self.client = None;
-        self.stopped = Some(Instant::now());
+        let bot_exit = self.main_loop(runner, client).await;
 
         match auction_loop.join() {
-            Err(_e) => Err(BotExit::ThreadPanic),
-            Ok(()) => Ok(result),
+            Err(e) => Err(BotExit::ThreadPanic(e)),
+            Ok(()) => Ok(bot_exit),
         }
     }
 
-    async fn main_loop(&mut self, mut runner: AsyncRunner) -> BotExit {
-        loop {
+    async fn main_loop(
+        &mut self,
+        mut runner: AsyncRunner,
+        client: Client,
+    ) -> BotExit {
+        self.client = Some(client);
+
+        let bot_exit = loop {
             match runner.next_message().await {
                 Ok(Status::Message(msg)) => self.handle_message(msg).await,
                 Ok(Status::Quit) => break BotExit::BotExited,
                 Ok(Status::Eof) => break BotExit::ConnectionClosed,
                 Err(error) => break error.into(),
             }
-        }
+        };
+
+        self.client = None;
+        self.stopped = Some(Instant::now());
+        bot_exit
     }
 
     async fn handle_command(

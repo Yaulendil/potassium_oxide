@@ -108,7 +108,6 @@ pub fn bot(cfg_path: Option<PathBuf>, channels: Vec<String>) -> ! {
             let config = config.with_path(path);
 
             for channel in channels.into_iter() {
-                info!("Joining #{}...", &channel);
                 let cfg = config.clone();
 
                 match Builder::new()
