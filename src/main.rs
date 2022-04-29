@@ -93,6 +93,8 @@ fn main() {
             exit(1);
         }
 
+        info!("Starting Potassium Oxide v{}", env!("CARGO_PKG_VERSION"));
+
         let (path, open): (PathBuf, ConfigOpen) = match Config::find(cfg_path) {
             ConfigFind::Exists(path, open) => {
                 info!("Using existing Config file: {}", path.display());
