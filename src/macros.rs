@@ -28,7 +28,9 @@ macro_rules! _msg {
     };
 
     //  Formatting arguments; Insert a pair of template braces.
-    (@$macro:ident $fmt:tt $pre:tt: $($tail:tt)+) => {_msg!(@$macro $fmt $pre: "{}", $($tail)+)};
+    (@$macro:ident $fmt:tt $pre:tt: $($tail:tt)+) => {
+        $crate::_msg!(@$macro $fmt $pre: "{}", $($tail)+)
+    };
 }
 
 #[cfg(feature = "chrono")]
@@ -54,7 +56,9 @@ macro_rules! _msg {
     };
 
     //  Formatting arguments; Insert a pair of template braces.
-    (@$macro:ident $fmt:tt $pre:tt: $($tail:tt)+) => {_msg!(@$macro $fmt $pre: "{}", $($tail)+)};
+    (@$macro:ident $fmt:tt $pre:tt: $($tail:tt)+) => {
+        $crate::_msg!(@$macro $fmt $pre: "{}", $($tail)+)
+    };
 }
 
 
