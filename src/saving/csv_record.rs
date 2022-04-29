@@ -1,7 +1,9 @@
 #![cfg(feature = "csv")]
 
+use std::{fs::File, path::Path};
 #[cfg(feature = "chrono")]
 use chrono::{DateTime, Utc};
+use csv::{QuoteStyle, ReaderBuilder, Terminator, WriterBuilder};
 use super::{AuctionFinished, Winner};
 
 
@@ -71,4 +73,55 @@ impl From<&AuctionFinished> for AuctionRecord {
             prize: auction.prize.clone(),
         }
     }
+}
+
+
+impl AuctionFinished {
+    fn csv_reader(headers: bool) -> ReaderBuilder {
+        let mut rb = ReaderBuilder::new();
+
+        rb.has_headers(headers);
+        rb.terminator(Terminator::CRLF);
+
+        rb
+    }
+
+    fn csv_writer(headers: bool) -> WriterBuilder {
+        let mut wb = WriterBuilder::new();
+
+        wb.has_headers(headers);
+        wb.quote_style(QuoteStyle::NonNumeric);
+        wb.terminator(Terminator::CRLF);
+
+        wb
+    }
+
+    pub fn save_csv(&self, path: &Path) -> std::io::Result<()> {
+        let mut csv = if path.exists() {
+            if cfg!(feature = "csv_validate") {
+                let mut read = Self::csv_reader(true).from_path(&path)?;
+                let mut iter = read.deserialize::<AuctionRecord>();
+
+                if let Some(record) = iter.next() {
+                    record?;
+                }
+            }
+
+            Self::csv_writer(false)
+                .from_writer(File::options()
+                    .append(true)
+                    .open(&path)?)
+        } else {
+            Self::csv_writer(true).from_path(&path)?
+        };
+
+        csv.serialize(self.to_record())?;
+        csv.flush()?;
+
+        info!("Saved record to spreadsheet: {}", path.display());
+
+        Ok(())
+    }
+
+    fn to_record(&self) -> AuctionRecord { self.into() }
 }

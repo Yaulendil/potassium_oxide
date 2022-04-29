@@ -109,57 +109,6 @@ impl AuctionFinished {
     }
 }
 
-#[cfg(feature = "csv")]
-impl AuctionFinished {
-    fn csv_reader(headers: bool) -> csv::ReaderBuilder {
-        let mut rb = csv::ReaderBuilder::new();
-
-        rb.has_headers(headers);
-        rb.terminator(csv::Terminator::CRLF);
-
-        rb
-    }
-
-    fn csv_writer(headers: bool) -> csv::WriterBuilder {
-        let mut wb = csv::WriterBuilder::new();
-
-        wb.has_headers(headers);
-        wb.quote_style(csv::QuoteStyle::NonNumeric);
-        wb.terminator(csv::Terminator::CRLF);
-
-        wb
-    }
-
-    pub fn save_csv(&self, path: &std::path::Path) -> std::io::Result<()> {
-        let mut csv = if path.exists() {
-            if cfg!(feature = "csv_validate") {
-                let mut read = Self::csv_reader(true).from_path(&path)?;
-                let mut iter = read.deserialize::<csv_record::AuctionRecord>();
-
-                if let Some(record) = iter.next() {
-                    record?;
-                }
-            }
-
-            Self::csv_writer(false)
-                .from_writer(File::options()
-                    .append(true)
-                    .open(&path)?)
-        } else {
-            Self::csv_writer(true).from_path(&path)?
-        };
-
-        csv.serialize(self.to_record())?;
-        csv.flush()?;
-
-        info!("Saved record to spreadsheet: {}", path.display());
-
-        Ok(())
-    }
-
-    fn to_record(&self) -> csv_record::AuctionRecord { self.into() }
-}
-
 impl From<Auction> for AuctionFinished {
     fn from(auction: Auction) -> Self {
         let winner = auction.winner();
