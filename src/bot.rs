@@ -127,6 +127,8 @@ impl Bot {
     }
 
     pub fn run(&mut self) -> Result<(), String> {
+        use UserConfigError::*;
+
         match self.config.auth() {
             Ok(conf) => block_on(async move {
                 while crate::running() {
@@ -147,11 +149,11 @@ impl Bot {
                 Ok(())
             }),
             Err(err) => Err(match err {
-                UserConfigError::InvalidName => "Invalid Username",
-                UserConfigError::InvalidToken => "Invalid OAuth Token",
-                UserConfigError::PartialAnonymous => "Partial Anonymous login",
-                _ => "Unknown error",
-            }.into()),
+                InvalidName => String::from("Invalid Username"),
+                InvalidToken => String::from("Invalid OAuth Token"),
+                PartialAnonymous => String::from("Partially Anonymous login"),
+                _ => format!("Unknown error: {err:?}"),
+            }),
         }
     }
 
