@@ -201,6 +201,8 @@ impl Bot {
             let channel: String = self.channel.clone();
             let subname: String = format!("#{}/auctions", channel);
             let summary: bool = self.config.summary(&channel);
+            #[cfg(feature = "csv")]
+            let opt_csv = self.config.file_csv().map(|p| p.to_owned());
 
             Builder::new().name(subname).spawn(move || {
                 /// Interval between Auction updates.
@@ -229,8 +231,17 @@ impl Bot {
 
                         if let AuctionStatus::Ended(_, auct) = status {
                             if summary {
-                                if let Err(e) = auct.finish().save(&channel) {
+                                let finished = auct.finish();
+
+                                if let Err(e) = finished.save(&channel) {
                                     warn!("Failed to save Auction data: {}", e);
+                                }
+
+                                #[cfg(feature = "csv")]
+                                if let Some(path) = &opt_csv {
+                                    if let Err(e) = finished.save_csv(path) {
+                                        warn!("Failed to write CSV: {}", e);
+                                    }
                                 }
                             }
                         }

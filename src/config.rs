@@ -91,6 +91,9 @@ pub struct ConfigAdmin {
     parse_commands: bool,
     prefix: String,
     reconnect: u64,
+
+    #[cfg(feature = "csv")]
+    file_csv: Option<PathBuf>,
 }
 
 
@@ -219,6 +222,11 @@ impl Config {
             Some(ConfigChannel { duration: Some(value), .. }) => *value,
             _ => self.auction.duration,
         })
+    }
+
+    #[cfg(feature = "csv")]
+    pub const fn file_csv(&self) -> Option<&PathBuf> {
+        self.admin.file_csv.as_ref()
     }
 
     pub fn helmet(&self, channel: &str) -> Duration {

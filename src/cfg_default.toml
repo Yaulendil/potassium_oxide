@@ -63,6 +63,16 @@ prefix = "+"
 # Number of seconds to wait before trying to reconnect.
 reconnect = 5
 
+# An optional path to be used to write a CSV file keeping track of all past
+#   Auctions. If this file does not exist, it will be created with the correct
+#   column headings. If it does exist, Auction records will be appended to it,
+#   under the assumption that it already has the correct headings. You should
+#   make sure that it does not exist yet when you first enable this setting.
+#
+# This setting will not do anything if the bot has been compiled without CSV
+#   output support.
+#file_csv = "~/k2o-auctions.csv"
+
 
 # Channel-specific overrides for Auction options.
 [channel.gamesdonequick]
