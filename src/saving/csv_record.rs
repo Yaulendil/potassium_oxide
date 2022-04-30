@@ -21,8 +21,8 @@ pub struct AuctionRecord {
     pub closed: (),
 
     pub duration_seconds: u64,
-    pub winner: Option<String>,
     pub winning_bid: Option<usize>,
+    pub winner: Option<String>,
     pub prize: Option<String>,
 }
 
@@ -34,8 +34,8 @@ impl AuctionRecord {
         self.opened;
         self.closed;
         self.duration_seconds;
-        self.winner;
         self.winning_bid;
+        self.winner;
         self.prize;
     }
 }
@@ -68,8 +68,8 @@ impl From<&AuctionFinished> for AuctionRecord {
             closed: (),
 
             duration_seconds: auction.duration,
-            winner,
             winning_bid,
+            winner,
             prize: auction.prize.clone(),
         }
     }
