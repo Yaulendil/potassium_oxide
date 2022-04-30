@@ -163,8 +163,6 @@ impl Bot {
 
     async fn run_once(&mut self, uconf: &UserConfig) -> Result<BotExit, BotExit> {
         info!("Joining #{}...", self.channel);
-        //  TODO: Can these two atomics be safely combined into one?
-        let run_main = Arc::new(AtomicBool::new(true));
         let run_thread = Arc::new(AtomicBool::new(true));
         let connection = Connector::twitch()?;
         let mut runner = AsyncRunner::connect(connection, uconf).await?;
@@ -207,15 +205,13 @@ impl Bot {
         let auction_thread = {
             let mut cli: Client = client.clone();
             let auction: Arc<Mutex<Option<Auction>>> = self.auction.clone();
-
-            let run_sub: Arc<AtomicBool> = run_thread.clone();
-            let run_top: Arc<AtomicBool> = run_main.clone();
+            let running: Arc<AtomicBool> = run_thread.clone();
 
             let channel: String = self.channel.clone();
             let subname: String = format!("#{}/auctions", channel);
             let summary: bool = self.config.summary(&channel);
-            #[cfg(feature = "csv")]
 
+            #[cfg(feature = "csv")]
             let opt_csv = self.config.file_csv().map(|p| p.to_owned());
 
             Builder::new().name(subname).spawn(move || {
@@ -226,7 +222,7 @@ impl Bot {
 
                 let mut time = Instant::now();
 
-                while crate::running() && cli.is_running() && run_sub.load(SeqCst) {
+                while crate::running() && cli.is_running() && running.load(SeqCst) {
                     if let Some(mut lock) = auction.try_lock_for(TIMEOUT) {
                         let status = auction_check(&mut lock);
 
@@ -263,13 +259,12 @@ impl Bot {
                     sleep(time.saturating_duration_since(Instant::now()));
                 }
 
-                run_top.store(false, SeqCst);
+                running.store(false, SeqCst);
                 block_on(cli.quit());
             })?
         };
 
-        let bot_exit = self.main_loop(runner, client, run_main).await;
-        run_thread.store(false, SeqCst);
+        let bot_exit = self.main_loop(runner, client, run_thread).await;
 
         match auction_thread.join() {
             Err(e) => Err(BotExit::ThreadPanic(e)),
@@ -298,6 +293,7 @@ impl Bot {
             }
         };
 
+        running.store(false, SeqCst);
         self.client = None;
         self.stopped = Some(Instant::now());
         bot_exit
