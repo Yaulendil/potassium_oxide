@@ -1,7 +1,7 @@
 [package]
 name = "k2o"
 description = "Run an Auction bot in Twitch chat via the IRC Bridge."
-version = "0.2.3"
+version = "0.2.4"
 edition = "2021"
 
 

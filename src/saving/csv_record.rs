@@ -24,6 +24,7 @@ pub struct AuctionRecord {
     pub winning_bid: Option<usize>,
     pub winner: Option<String>,
     pub prize: Option<String>,
+    pub note: Option<String>,
 }
 
 impl AuctionRecord {
@@ -37,6 +38,7 @@ impl AuctionRecord {
         self.winning_bid;
         self.winner;
         self.prize;
+        self.note;
     }
 }
 
@@ -71,6 +73,7 @@ impl From<&AuctionFinished> for AuctionRecord {
             winning_bid,
             winner,
             prize: auction.prize.clone(),
+            note: None,
         }
     }
 }
