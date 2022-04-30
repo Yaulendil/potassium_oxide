@@ -338,15 +338,12 @@ impl Bot {
             }
             ["auction", subcom, args @ ..] if usr_op => match *subcom {
                 "prize" => {
-                    let mut guard = self.auction.lock();
-                    let auction = guard.as_mut()?;
+                    let mut lock = self.auction.lock();
+                    let auction = lock.as_mut()?;
 
-                    auction.prize = match args {
-                        [] => None,
-                        [one] => Some(unquote(one).to_owned()),
-                        [first, ..] => substring_to_end(line, first)
-                            .map(|s| s.to_string()),
-                    };
+                    // let prize = auction.prize.take();
+                    auction.prize = to_end_unquoted(line, args)
+                        .map(|s| s.to_owned());
 
                     Some(Reply(match &auction.prize {
                         Some(s) => format!("The current Auction is for {}.", s),
@@ -416,9 +413,7 @@ impl Bot {
                             )),
                         ));
 
-                        Some(Message(new.explain(
-                            self.config.prefix(), &vrb,
-                        )))
+                        Some(Message(new.explain(self.config.prefix(), &vrb)))
                     }
                 }
                 "stop" => Some(Reply(match self.auction.lock().take() {
@@ -427,8 +422,7 @@ impl Bot {
                 })),
                 _ => None,
             }
-            ["bid", args @ ..] if !args.is_empty() => match to_end_unquoted(line, args)
-                .unwrap_or_else(|| unquote(args[0]))
+            ["bid", value, ..] => match unquote(value)
                 .trim_start_matches('$')
                 .parse::<usize>()
             {
