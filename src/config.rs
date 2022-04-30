@@ -28,7 +28,7 @@ fn contains<I, T, U>(sequence: I, want: U) -> bool where
 
 /// Locate the Path of the Config File.
 fn find_path() -> Option<PathBuf> {
-    let dirs: ProjectDirs = ProjectDirs::from("", "", env!("CARGO_PKG_NAME"))?;
+    let dirs: ProjectDirs = crate::dirs()?;
     let mut path: PathBuf = dirs.config_dir().to_owned();
 
     path.push(CONFIG_PATH);

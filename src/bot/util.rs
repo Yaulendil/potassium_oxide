@@ -7,12 +7,18 @@ const fn is_quote(char: u8) -> bool {
 
 
 const fn get_quoted(text: &str) -> Option<Range<usize>> {
-    let last: usize = text.len() - 1;
-    let c0: u8 = text.as_bytes()[0];
-    let c1: u8 = text.as_bytes()[last];
+    let len: usize = text.len();
 
-    if c0 == c1 && is_quote(c0) {
-        Some(1..last)
+    if 2 <= len {
+        let last: usize = len - 1;
+        let c0: u8 = text.as_bytes()[0];
+        let c1: u8 = text.as_bytes()[last];
+
+        if c0 == c1 && is_quote(c0) {
+            Some(1..last)
+        } else {
+            None
+        }
     } else {
         None
     }

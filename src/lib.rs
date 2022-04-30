@@ -2,16 +2,16 @@
 extern crate serde;
 
 #[macro_use]
-mod macros;
+pub mod macros;
 
 pub mod bot;
 pub mod config;
 pub mod saving;
 
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
+use directories::ProjectDirs;
 pub use bot::{Bot, BotExit};
 pub use config::{Config, ConfigFile};
-use saving::AuctionFinished;
 
 
 static STOP: AtomicBool = AtomicBool::new(false);
@@ -32,4 +32,9 @@ pub fn run_bot(channel: String, config: ConfigFile) {
         Err(failed) => err!("Failed to run bot: {}", failed),
         Ok(..) => info!("Complete."),
     }
+}
+
+
+fn dirs() -> Option<ProjectDirs> {
+    ProjectDirs::from("", "", env!("CARGO_PKG_NAME"))
 }

@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 #[cfg(feature = "chrono")]
 use chrono::{DateTime, SubsecRound, Utc};
-use crate::AuctionFinished;
+use crate::saving::AuctionFinished;
 
 
 #[derive(Deserialize, Serialize)]

@@ -2,8 +2,7 @@ mod csv_record;
 
 use std::{fmt::Display, fs::File, io::Write};
 #[cfg(feature = "chrono")]
-use chrono::{Datelike, DateTime, Duration, SubsecRound, Timelike, Utc};
-use directories::ProjectDirs;
+use chrono::{DateTime, Duration, SubsecRound, Utc};
 use heck::SnakeCase;
 use crate::bot::auction::{Auction, Bid, Winner};
 
@@ -58,22 +57,7 @@ impl AuctionFinished {
 
     #[cfg(feature = "chrono")]
     fn timestamp(&self) -> impl Display {
-        format!(
-            //  yyyymmdd-hhmmss
-            "{:0>4}{:0>2}{:0>2}\
-            -{:0>2}{:0>2}{:0>2}",
-            // //  yyyymmddThhmmssZ
-            // "{:0>4}{:0>2}{:0>2}\
-            // T{:0>2}{:0>2}{:0>2}Z",
-            self.opened.year(),
-            self.opened.month(),
-            self.opened.day(),
-            self.opened.hour(),
-            self.opened.minute(),
-            self.opened.second(),
-        )
-
-        // self.opened.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+        self.opened.format("%Y%m%d-%H%M%S")
     }
 
     #[cfg(not(feature = "chrono"))]
@@ -88,7 +72,7 @@ impl AuctionFinished {
     pub fn save(&self, channel: &str) -> std::io::Result<()> {
         info!("Saving auction data...");
 
-        match ProjectDirs::from("", "", env!("CARGO_PKG_NAME")) {
+        match crate::dirs() {
             Some(dirs) => match toml::to_vec(self) {
                 Ok(data) => {
                     let mut path = dirs.data_dir().to_owned();
