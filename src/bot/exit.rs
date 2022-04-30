@@ -5,6 +5,7 @@ pub enum BotExit {
     BotExited,
     ConnectionClosed,
     ThreadPanic(Box<dyn std::any::Any + Send>),
+    ThreadStopped,
 
     RunnerError(twitchchat::runner::Error),
     IoError(std::io::Error),
@@ -35,6 +36,7 @@ impl Display for BotExit {
             BotExit::ConnectionClosed => f.write_str("Connection closed."),
             BotExit::ThreadPanic(_) => f.write_str("Worker thread panicked."),
             // BotExit::ThreadPanic(e) => write!(f, "Worker thread panicked: {:?}", e),
+            BotExit::ThreadStopped => f.write_str("Worker thread closed."),
 
             BotExit::RunnerError(e) => write!(f, "Twitch Chat error: {}", e),
             BotExit::IoError(e) => write!(f, "I/O Error: {}", e),
