@@ -422,9 +422,9 @@ impl Bot {
                     }
                 }
                 "stop" => Some(Reply(match self.auction.lock().take() {
-                    Some(..) => "Auction stopped.",
-                    None => "No Auction is currently running.",
-                }.into())),
+                    Some(..) => String::from("Auction stopped."),
+                    None => String::from("No Auction is currently running."),
+                })),
                 _ => None,
             }
             ["bid", args @ ..] if !args.is_empty() => match to_end_unquoted(line, args)
@@ -491,9 +491,9 @@ impl Bot {
                 author, substring_to_end(line, arg).unwrap_or(arg),
             ))),
             ["reload", ..] if usr_op => Some(Reply(match self.config.reload() {
-                Ok(..) => "Configuration reloaded.",
-                Err(_) => "Failed to reload Config.",
-            }.into())),
+                Ok(..) => String::from("Configuration reloaded."),
+                Err(_) => String::from("Failed to reload Config."),
+            })),
             _ => None,
         }
     }
