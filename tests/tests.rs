@@ -5,9 +5,9 @@ use k2o::*;
 fn test_currency() {
     const FIVE: usize = 5;
 
-    let _args: std::fmt::Arguments = usd!(FIVE);
-    let five: String = format!("{}", usd!(FIVE));
-    let ltrl: &'static str = usd!(5);
+    let _args: std::fmt::Arguments = money!(FIVE);
+    let five: String = format!("{}", money!(FIVE));
+    let ltrl: &'static str = money!(5);
 
     dbg!(&five);
     dbg!(&ltrl);

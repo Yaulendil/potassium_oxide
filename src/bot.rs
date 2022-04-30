@@ -67,7 +67,7 @@ fn auction_check(lock: &mut Option<Auction>) -> AuctionStatus {
                 t if announce_time(t) => match auction.last_bid() {
                     Some(Bid { amount, .. }) => Active(Some(format!(
                         "Auction: {} seconds remain. The current bid{} is {}.",
-                        t, auction.for_prize(), usd!(amount),
+                        t, auction.for_prize(), money!(amount),
                     ))),
                     None => Active(Some(match auction.prize.as_ref() {
                         Some(prize) => format!(
@@ -84,7 +84,7 @@ fn auction_check(lock: &mut Option<Auction>) -> AuctionStatus {
                 let out: String = match auction.last_bid() {
                     Some(Bid { amount, bidder, .. }) => format!(
                         "The {} has been won by @{}, with a bid of {}.",
-                        auction.describe(), bidder, usd!(amount),
+                        auction.describe(), bidder, money!(amount),
                     ),
                     None => format!(
                         "The {} has ended with no bids.",
@@ -179,11 +179,11 @@ impl Bot {
                     let status = match auction.last_bid() {
                         Some(Bid { amount, bidder, .. }) => format!(
                             "The highest bidder is currently @{} at {}",
-                            bidder, usd!(amount),
+                            bidder, money!(amount),
                         ),
                         None => format!(
                             "The minimum bid is {}",
-                            usd!(auction.min_bid),
+                            money!(auction.min_bid),
                         ),
                     };
 
@@ -324,7 +324,7 @@ impl Bot {
                         is {}, but there have not been any bids yet.",
                         auction.describe(),
                         time,
-                        usd!(auction.min_bid),
+                        money!(auction.min_bid),
                     ),
                     Some(Bid { amount, bidder, .. }) => format!(
                         "The {} still has {} remaining. The leader is \
@@ -332,7 +332,7 @@ impl Bot {
                         auction.describe(),
                         time,
                         bidder,
-                        usd!(amount),
+                        money!(amount),
                     ),
                 }))
             }
@@ -423,7 +423,7 @@ impl Bot {
                 _ => None,
             }
             ["bid", value, ..] => match unquote(value)
-                .trim_start_matches('$')
+                .trim_start_matches(money!(""))
                 .parse::<usize>()
             {
                 Ok(bid) => Some(match self.auction.lock()
@@ -434,28 +434,28 @@ impl Bot {
                         "{} BID: @{} has bid {}.",
                         if first { "FIRST" } else { "NEW" },
                         author,
-                        usd!(bid),
+                        money!(bid),
                     )),
                     BidResult::RepeatBidder(bid) => Reply(format!(
                         "You are already the top bidder at {}.",
-                        usd!(bid),
+                        money!(bid),
                     )),
                     BidResult::AboveMaximum(max) => Reply(format!(
                         "You can only raise by a maximum of {}.",
-                        usd!(max),
+                        money!(max),
                     )),
                     BidResult::BelowMinimum(min) => Reply(format!(
                         "The minimum bid is {}.",
-                        usd!(min),
+                        money!(min),
                     )),
                     BidResult::DoesNotRaise(cur) => Reply(format!(
                         "The current bid is {}.",
-                        usd!(cur),
+                        money!(cur),
                     )),
                 }),
                 Err(..) if self.auction.lock().is_some() => Some(Reply(format!(
                     "A bid must be a positive whole number of {}.",
-                    usd!(),
+                    money!(),
                 ))),
                 _ => None,
             }
@@ -469,8 +469,8 @@ impl Bot {
                     Maximum raise is {max}.",
                     dur = self.config.duration(channel).as_secs(),
                     hlm = self.config.helmet(channel).as_secs(),
-                    max = usd!(self.config.max_raise(channel)),
-                    min = usd!(self.config.min_bid(channel)),
+                    max = money!(self.config.max_raise(channel)),
+                    min = money!(self.config.min_bid(channel)),
                 )))
             }
             #[cfg(debug_assertions)]

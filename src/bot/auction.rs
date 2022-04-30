@@ -116,7 +116,7 @@ impl Auction {
             info!("Bid by {} refused (too low).", name_new);
             BidResult::BelowMinimum(self.min_bid)
         } else {
-            info!("New bid: {} by {}.", usd!(bid_new), name_new);
+            info!("New bid: {} by {}.", money!(bid_new), name_new);
             self.bids.push(Bid {
                 amount: bid_new,
                 bidder: name_new.to_string(),
@@ -164,8 +164,8 @@ impl Auction {
             winner, and they will have to {verb} that amount in order to claim \
             their prize. Bidding starts at {min_bid}, and is NOW OPEN.",
             // auction = self.describe(),
-            // max_raise = usd!(self.max_raise),
-            min_bid = usd!(self.min_bid),
+            // max_raise = money!(self.max_raise),
+            min_bid = money!(self.min_bid),
             prefix = prefix,
             time = humantime::format_duration(
                 self.time_close.saturating_duration_since(self.time_begin)

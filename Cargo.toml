@@ -1,14 +1,13 @@
 [package]
 name = "k2o"
 description = "Run an Auction bot in Twitch chat via the IRC Bridge."
-version = "0.2.4"
+version = "0.2.5"
 edition = "2021"
 
 
 [dependencies]
 argh = "0.1.6"
-chrono = { version = "0.4.19", features = ["serde"], optional = true }
-csv = { version = "1.1", optional = true }
+cfg-if = "1.0.0"
 ctrlc = "3.2"
 directories = "4.0.1"
 heck = "0.3"
@@ -17,9 +16,20 @@ parking_lot = "0.11"
 serde = { version = "1.0", features = ["derive"] }
 smol = "1.2"
 spin_sleep = "1.0.0"
-#toml = { version = "0.5.8", features = ["preserve_order"] }
 toml = "0.5.8"
-twitchchat = { version = "0.14.8", features = ["async", "async-tls", "smol"] }
+
+[dependencies.chrono]
+version = "0.4.19"
+features = ["serde"]
+optional = true
+
+[dependencies.csv]
+version = "1.1"
+optional = true
+
+[dependencies.twitchchat]
+version = "0.14.8"
+features = ["async", "async-tls", "smol"]
 
 
 [profile.release]
@@ -31,6 +41,12 @@ panic = "abort"
 
 [features]
 default = ["chrono", "csv"]
+
+
+currency_cad = []
+currency_eur = []
+currency_gbp = []
+currency_jpy = []
 
 # Before writing to an existing CSV file, check to make sure that its contents
 #   are valid.
