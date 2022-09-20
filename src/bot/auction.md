@@ -3,6 +3,13 @@
 **NOTE: This guide assumes that you are using the default value for the `prefix` setting.**
 
 
+## Before an Auction
+
+This bot sends a large number of messages in a very short period of time while an auction runs. Twitch does not like it very much when a normal user does this. As a result, it is highly recommended to make sure that the account that will be used to run auctions is set to be a channel VIP. This should help to ensure that the bot is able to post important auction-related information, including winners, in the chat.
+
+Being a VIP will also allow the bot to post in channels with chat restrictions in place, such as subscriber-only mode.
+
+
 ## Running an Auction
 
 The basic command to run an Auction is `+auction start`. The bot will send a long message explaining how to bid, and immediately start an Auction using the default values specified in the Configuration file. You can view all the default Configuration values ahead of time with the `+config` command.
